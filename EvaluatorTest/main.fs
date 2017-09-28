@@ -5,6 +5,7 @@ open System.IO
 open System.Collections.Generic
 open Evaluator
 
+/// Interpreter test app
 module main =
 
     /// Load data from file
@@ -63,10 +64,10 @@ module main =
             |> Seq.iter (fun key -> let value = results.Named.[key] in
                                     Console.WriteLine("{0}: {1}", key, value))
         with e -> do
-                    Console.ForegroundColor <- ConsoleColor.Red
-                    Console.WriteLine(e.Message)
-                    Console.WriteLine(e.StackTrace)
+            Console.ForegroundColor <- ConsoleColor.Red
+            Console.WriteLine(e.Message)
+            Console.WriteLine(e.StackTrace)
     else
-        Console.WriteLine("usage: EvaluatorTest <file> [<data-file>]")
+        Console.Error.WriteLine("usage: EvaluatorTest <file> [<data-file>]")
 
     Console.ReadKey() |> ignore

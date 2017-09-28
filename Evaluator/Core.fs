@@ -48,6 +48,7 @@ module internal Core =
         | MakeHash of int
         | ArrayGet
         | ArraySet
+        | ArraySetMath of MathOp
         | Math of MathOp
         | String of StringOp
         | Compare of CmpOp
@@ -96,55 +97,8 @@ module internal Core =
         /// Data context
         let mutable context: Context = Unchecked.defaultof<Context>
 
-        /// Make array and move elements from stack to it
-        let makeElemsArray (numElems: int) =
-            let elemsList = new List<Data>() in
-            List.iter (fun _ -> let elem = context.PopFromStack() in
-                                elemsList.Insert(0, elem)) 
-                      [1..numElems]
-            context.PushToStack (Data.DataArray(elemsList))
-
-        /// Make hash and move elements from stack to it
-        let makeElemsHash (numElems: int) =
-            let elemsHash = new Dictionary<string, Data>() in
-            List.iter (fun _ -> let value = context.PopFromStack()
-                                let key = context.PopStringFromStack() in
-                                elemsHash.Add(key, value))
-                      [1..numElems]
-            context.PushToStack (Data.DataHash(elemsHash))
-
-        /// Return array/hash element
-        let getArrayElem() : Data =
-            let index: Data = context.PopFromStack()
-            let arrayItem: Data = context.PopFromStack() in
-            match arrayItem with
-            | DataArray(arr) ->
-                match index with
-                | Number(idx) -> arr.[int(idx)]
-                | _ -> failwith "Expected numeric index for array!"
-            | DataHash(hash) ->
-                match index with
-                | Text(key) -> if hash.ContainsKey(key) 
-                                then hash.[key]
-                                else Empty
-                | _ -> failwith "Expected string index for hash!"
-            | _ -> failwith "Array required!" 
-
-        /// Set array/hash element
-        let setArrayElem(): unit =
-            let index: Data = context.PopFromStack()
-            let arrayItem: Data = context.PopFromStack()
-            let elem: Data = context.PopFromStack() in
-            match arrayItem with
-            | DataArray(arr) ->
-                match index with
-                | Number(num) -> arr.[int(num)] <- elem
-                | _ -> failwith "Expexted numeric index for array!"
-            | DataHash(hash) ->
-                match index with
-                | Text(key) -> hash.[key] <- elem
-                | _ -> failwith "Expected string index for hash!"
-            | _ -> failwith "Array required!"
+        /// Sequence to interpret (module ?)
+        let mutable programModule: Sequence option = None
 
         /// Set comparsion result
         let setCmpResult (result : int) :unit =
@@ -241,6 +195,74 @@ module internal Core =
                     | _ -> failwith "Incorrect logic operation!"
             context.PushToStack(Boolean(result))
 
+        /// Make array and move elements from stack to it
+        let makeElemsArray (numElems: int) =
+            let elemsList = new List<Data>() in
+            List.iter (fun _ -> let elem = context.PopFromStack() in
+                                elemsList.Insert(0, elem)) 
+                      [1..numElems]
+            context.PushToStack (Data.DataArray(elemsList))
+
+        /// Make hash and move elements from stack to it
+        let makeElemsHash (numElems: int) =
+            let elemsHash = new Dictionary<string, Data>() in
+            List.iter (fun _ -> let value = context.PopFromStack()
+                                let key = context.PopStringFromStack() in
+                                elemsHash.Add(key, value))
+                      [1..numElems]
+            context.PushToStack (Data.DataHash(elemsHash))
+
+        /// Return array/hash element
+        let getArrayElem() : Data =
+            let index: Data = context.PopFromStack()
+            let arrayItem: Data = context.PopFromStack() in
+            match arrayItem with
+            | DataArray(arr) ->
+                match index with
+                | Number(idx) -> arr.[int(idx)]
+                | _ -> failwith "Expected numeric index for array!"
+            | DataHash(hash) ->
+                match index with
+                | Text(key) -> if hash.ContainsKey(key) 
+                                then hash.[key]
+                                else Empty
+                | _ -> failwith "Expected string index for hash!"
+            | _ -> failwith "Array required!" 
+
+        /// Set array/hash element
+        let setArrayElem(): unit =
+            let index: Data = context.PopFromStack()
+            let arrayItem: Data = context.PopFromStack()
+            let elem: Data = context.PopFromStack() in
+            match arrayItem with
+            | DataArray(arr) ->
+                match index with
+                | Number(num) -> arr.[int(num)] <- elem
+                | _ -> failwith "Expected numeric index for array!"
+            | DataHash(hash) ->
+                match index with
+                | Text(key) -> hash.[key] <- elem
+                | _ -> failwith "Expected string index for hash!"
+            | _ -> failwith "Array required!"
+
+        /// Set array/hash element with performing math operation
+        let setArrayElemWithMath (op: MathOp) : unit =
+            let index: Data = context.PopFromStack()
+            let arrayItem: Data = context.PopFromStack()
+            let value: Data = context.PopFromStack() in do
+                context.PushToStack(arrayItem)
+                context.PushToStack(index)
+                // origArrayElem = arrayItem[index]
+                let origArrayElem = getArrayElem() in do
+                    context.PushToStack(origArrayElem)
+                    context.PushToStack(value)
+                    // _result = origArrayItem <op> value
+                    performMath(op)
+                    context.PushToStack(arrayItem)
+                    context.PushToStack(index)
+                    // arrayItem[index] = _result
+                    setArrayElem()
+
         /// Get constant value
         let getConstant (name: string) : Data =
             match name with
@@ -280,26 +302,6 @@ module internal Core =
         /// Named results
         member this.NamedResults with get() = context.NamedResults
 
-        /// Set input data
-        member this.SetData (data: Dictionary<string, Object>) =
-            let dateVal : DateTime ref = ref DateTime.Now
-            Seq.iter (fun key ->
-                let value = data.[key]
-                let dataValue =
-                    match value with
-                    | str when (str :? string) -> Text(str :?> string)
-                    // Convert to float
-                    | num when (num :? float) -> Number(num :?> float)
-                    | num when (num :? int) -> Number(float(num :?> int))
-                    // Date
-                    | date when (date :? DateTime) -> Date(date :?> DateTime)
-                    // Boolean
-                    | bln when (bln :? bool) -> Boolean(bln :?> bool)
-                    | null -> Empty
-                    | _ -> failwith "Incorrect input data type!"
-                in context.Input.Add(key, dataValue))
-                data.Keys
-
         /// Execute one instruction and return next index
         member private this.ExecuteInstruction (instruction: OpCode)
                                                (index: int) : int =
@@ -331,6 +333,7 @@ module internal Core =
             | MakeHash elemCount -> makeElemsHash elemCount
             | ArrayGet -> let elem = getArrayElem() in context.PushToStack elem
             | ArraySet -> setArrayElem()
+            | ArraySetMath op -> setArrayElemWithMath op
             // Operators
             | Math op -> performMath op
             | String op -> performString op
@@ -345,34 +348,62 @@ module internal Core =
             | Ret -> nextIndex <- returnCallerFrame()
             // Data output
             | Emit -> context.TextOutput.Add(context.PopAsResult())
-            | EmitNamed key -> context.NamedResults.Add(key, context.PopAsResult())
+            | EmitNamed key ->
+                let value: Object = context.PopAsNativeObject() in
+                context.NamedResults.Add(key, value)
             // | _ -> failwithf "Unsupported opcode: %s!" (instruction.ToString())
             nextIndex
 
-        /// Interpret instructions sequence
-        member this.Interpret (program : Sequence) =
-            let sequence = program.Instructions
+        /// Set input data
+        member this.SetData (data: Dictionary<string, Object>) : unit =
+            let dateVal : DateTime ref = ref DateTime.Now
+            Seq.iter (fun key ->
+                let value = data.[key]
+                let dataValue =
+                    match value with
+                    | str when (str :? string) -> Text(str :?> string)
+                    // Convert to float
+                    | num when (num :? float) -> Number(num :?> float)
+                    | num when (num :? int) -> Number(float(num :?> int))
+                    // Date
+                    | date when (date :? DateTime) -> Date(date :?> DateTime)
+                    // Boolean
+                    | bln when (bln :? bool) -> Boolean(bln :?> bool)
+                    | null -> Empty
+                    | _ -> failwith "Incorrect input data type!"
+                in context.Input.Add(key, dataValue))
+                data.Keys
+
+        /// Set instructions sequence to interpret
+        member this.SetSequence (program : Sequence) : unit =
+            programModule <- Some(program)
             constData <- program.Data
             functions <- program.Functions
             functionFrameSizes <- program.FrameSizes
             context <- Context(DataFrame(None, functionFrameSizes.[-1]))
 
-            let seqLength = sequence.Count
-            let mutable index = program.EntryPoint
-            let mutable nextIndex = index + 1 in
+        /// Execute instructions sequence
+        member this.Interpret() : unit =
+            match programModule with
+            | Some(program) ->
+                let sequence = program.Instructions
+                let seqLength = sequence.Count
+                let mutable index = program.EntryPoint
+                let mutable nextIndex = index + 1 in
 
-            try
-                while index < seqLength do
-                    let instruction = sequence.[index] in
-                    index <- this.ExecuteInstruction instruction index
-                    nextIndex <- index + 1
-            // Runtime exceptions handling
-            with e ->
-                let opCodeInfo = sequence.[index].ToString() in
-                raise (new Errors.ExecutionException(opCodeInfo, e.Message))
+                try
+                    while index < seqLength do
+                        let instruction = sequence.[index] in
+                        index <- this.ExecuteInstruction instruction index
+                        nextIndex <- index + 1
+                // Runtime exceptions handling
+                with e ->
+                    let opCodeInfo = sequence.[index].ToString() in
+                    raise (new Errors.ExecutionException(opCodeInfo, e.Message))
+            | None -> failwith "No instructions specified!"
 
         /// Dump register contents
-        member this.Dump() =
+        member this.Dump() : unit =
             let valueToString (value: Data) : string =
                 match value with
                 | Empty -> "Empty"

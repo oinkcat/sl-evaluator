@@ -130,6 +130,9 @@ module internal Loader =
             | "mk_hash" -> OpCode.MakeHash(argument |> asNumber)
             | "get" -> OpCode.ArrayGet
             | "set" -> OpCode.ArraySet
+            | "set.op" when isMathOp(argument) ->
+                let mathOp = mathOps.[argument] in
+                OpCode.ArraySetMath(mathOps.[argument])
             // Operations
             | math when isMathOp(math) -> OpCode.Math mathOps.[math]
             | str when isStringOp(str) -> OpCode.String stringOps.[str]

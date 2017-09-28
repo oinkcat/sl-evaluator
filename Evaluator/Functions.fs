@@ -93,7 +93,7 @@ module Functions =
                             | "d" -> diffSpan.TotalDays
                             | _ -> failwith "Invalid DateDiff unit!"
             ctx.PushToStack (Number(result))
-        // Other
+        // Array functions
         | "length" ->
             let compoundElement: Data = ctx.PopFromStack()
             let length: int = match compoundElement with
@@ -102,6 +102,28 @@ module Functions =
                                 | DataHash(hash) -> hash.Count
                                 | _ -> failwith "Invalid value for Length!"
             ctx.PushToStack (Number(float(length)))
+        | "append" ->
+            let newElement: Data = ctx.PopFromStack()
+            let array = ctx.PopArrayFromStack() in
+            array.Add(newElement)
+        | "find" ->
+            let elemToFind: Data = ctx.PopFromStack()
+            let array = ctx.PopArrayFromStack() in
+            () // TODO!!!
+        | "delete" ->
+            let elemKey: Data = ctx.PopFromStack()
+            let array: Data = ctx.PopFromStack() in
+            match array with
+            | DataArray(arr) ->
+                match elemKey with
+                | Number(num) -> arr.RemoveAt(int(num))
+                | _ -> failwith "Expected numeric index for array!"
+            | DataHash(hash) ->
+                match elemKey with
+                | Text(key) -> hash.Remove(key) |> ignore
+                | _ -> failwith "Expected string key for hash!"
+            | _ -> failwith "Expected array or hash!"
+        // Other
         | "format" ->
             let fmtParams: string = ctx.PopAsResult()
             let fmtName: string = ctx.PopStringFromStack()

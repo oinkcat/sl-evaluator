@@ -79,7 +79,20 @@ module DataContext =
         let textResults = new List<string>()
 
         /// Named results
-        let namedResults = new Dictionary<string, string>()
+        let namedResults = new Dictionary<string, Object>()
+
+        /// Convert value to .NET object
+        let rec convertToObject = function
+            | Empty -> null
+            | Number(num) -> num :> Object
+            | Text(txt) -> txt :> Object
+            | Boolean(bln) -> bln :> Object
+            | Date(date) -> date :> Object
+            | DataArray(arr) -> Array.ofSeq(Seq.map convertToObject arr) :> Object
+            | DataHash(hash) -> 
+                let pairs = Seq.map (fun (kv: KeyValuePair<string, Data>) ->
+                                        (kv.Key, convertToObject(kv.Value))) hash
+                in Map.ofSeq pairs :> Object
 
         member this.Frame with get() = frame and 
                                set(newFrame: DataFrame) = frame <- newFrame
@@ -114,6 +127,12 @@ module DataContext =
             | Date(date) -> date
             | _ -> failwith "Expected: Date!"
 
+        /// Pop array from stack
+        member this.PopArrayFromStack() : List<Data> =
+            match this.PopFromStack() with
+            | DataArray(list) -> list
+            | _ -> failwith "Expected: Array!"
+
         /// Convert data value to string
         member this.DataToString (data: Data) =
             match data with
@@ -145,6 +164,10 @@ module DataContext =
             | Date(date) -> date.Year > 1 || date.Month > 1 || date.Day > 1
             | DataArray(arr) -> arr.Count > 0
             | DataHash(hash) -> hash.Count > 0
+
+        /// Pop value as plain .NET object
+        member this.PopAsNativeObject() : Object =
+            convertToObject(this.PopFromStack())
 
         /// Duplicate data on top of stack
         member this.DuplicateStackData() =

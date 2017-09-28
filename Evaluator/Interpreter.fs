@@ -23,10 +23,8 @@ type EvaluatorException(baseException: Exception) =
 /// Interface for results evaluator
 module Interpreter =
 
-    // TODO: loaded sequences cache
-
     /// Evaluation results
-    type Results = { Text: List<string>; Named: Dictionary<string, string> }
+    type Results = { Text: List<string>; Named: Dictionary<string, Object> }
     
     /// Evaluate results based on instruction sequence and input data
     let public Evaluate (sequenceStream: Stream)
@@ -35,8 +33,9 @@ module Interpreter =
         try
             let interpreter = Core.SequenceInterpreter()
             let sequence = Loader.Load(sequenceStream) in do
+                interpreter.SetSequence sequence
                 interpreter.SetData data
-                interpreter.Interpret sequence
+                interpreter.Interpret()
 
             { 
                 Text = interpreter.TextResults
