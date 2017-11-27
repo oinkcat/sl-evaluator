@@ -5,6 +5,14 @@ open System
 /// Error reporting
 module internal Errors =
 
+    /// Information about script error
+    type RuntimeErrorInfo = {
+        Index : int
+        OpCodeName : string
+        Error : Exception
+        Dump : string
+    }
+
     /// Exception while loading instructions file
     type LoadException(line: int, msg: string) =
         inherit Exception(msg)
@@ -12,7 +20,13 @@ module internal Errors =
         member this.LineNumber = line
 
     /// Exception while executing instruction sequence
-    type ExecutionException(opCodeInfo: string, msg: string) =
-        inherit Exception(msg)
+    type ExecutionException(info: RuntimeErrorInfo) =
+        inherit Exception(info.Error.Message)
 
-        member this.OpCodeInfo = opCodeInfo
+        member this.OpCodeInfo = info.OpCodeName
+
+        member this.OpCodeIndex = info.Index
+
+        member this.Stack = info.Error.StackTrace
+
+        member this.FrameDump = info.Dump

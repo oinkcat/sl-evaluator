@@ -22,7 +22,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
     <DocumentationFile>bin\Debug\EvaluatorTest.XML</DocumentationFile>
-    <StartArguments>"C:\SharedProjects\compiler_service\test_op_assign.lb"</StartArguments>
+    <StartArguments>"C:\Users\softc\Documents\Visual Studio 2013\Projects\CustomForms\CustomFormsTest\Storage\Instructions\screening\main.lb" "C:\Users\softc\Documents\Visual Studio 2013\Projects\Evaluator\EvaluatorTest\test_data.txt"</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>

@@ -15,6 +15,7 @@ module internal Loader =
     type CmpBin = Core.CmpOp
     type BoolBin = Core.LogicOp
     type Cond = Core.JumpCondition
+    type FnDisp = Core.FunctionDisposition
     type FnInfo = Core.FunctionInfo
     type Sequence = Core.Sequence
     type Data = DataContext.Data
@@ -146,16 +147,19 @@ module internal Loader =
                         else OpCode.EmitNamed(argument |> asText)
             // Function call/return
             | "call" -> if argument.Length > 0
-                        then OpCode.Call(argument.ToLowerInvariant())
+                        then OpCode.Call(FnDisp.Extern(argument.ToLower()))
                         else failwith "Function name required!"
-            | "invoke" -> OpCode.Invoke(-1)
+            | "invoke" -> OpCode.Call(FnDisp.Defined -1)
             | "ret" -> OpCode.Ret
             | _ -> failwithf "Invalid instruction: %s!" opName
         in match opCode with
             // Return label name for jump commands
             | OpCode.Jump _ as jOpCode -> (jOpCode, Some(argument))
             | OpCode.CondJump _ as cjOpCode -> (cjOpCode, Some(argument))
-            | OpCode.Invoke _ as invOpCode -> (invOpCode, Some(argument))
+            | OpCode.Call disp as callOpCode -> 
+                match disp with
+                | FnDisp.Defined _ -> (callOpCode, Some(argument))
+                | _ -> (callOpCode, None)
             | nonJumpOpCode -> (nonJumpOpCode, None)
 
     /// Is line is a comment
@@ -280,7 +284,7 @@ module internal Loader =
                 // Rewrite jump opcodes with correct targets
                 | OpCode.Jump _ -> OpCode.Jump target
                 | OpCode.CondJump (cond, _) -> OpCode.CondJump (cond, target)
-                | OpCode.Invoke _ -> OpCode.Invoke target
+                | OpCode.Call _ -> OpCode.Call(FnDisp.Defined target)
                 | other -> other (* This never happens *) )
 
         // Return all information about program

@@ -30,6 +30,9 @@ module internal Core =
     /// Data comparsion result
     type ComparsionResult = IsLess | IsEqual | IsGreater | Undefined
 
+    /// Function type and access information
+    type FunctionDisposition = Extern of string | Defined of int
+
     /// Instruction opcode
     type OpCode =
         | LoadStr of string
@@ -55,8 +58,8 @@ module internal Core =
         | Logic of LogicOp
         | Jump of int
         | CondJump of JumpCondition * int
-        | Call of string
-        | Invoke of int
+        | Call of FunctionDisposition
+        | Invoke
         | Ret
         | Emit
         | EmitNamed of string
@@ -343,8 +346,11 @@ module internal Core =
             | Jump newIndex -> nextIndex <- newIndex
             | CondJump (jumpType, newIndex) -> if checkCanJump jumpType
                                                 then nextIndex <- newIndex
-            | Call name -> callFunction name context
-            | Invoke fnIndex -> nextIndex <- (jumpAsFunction fnIndex nextIndex)
+            | Call disp -> 
+                match disp with
+                | Extern name -> callFunction name context
+                | Defined fnIndex -> nextIndex <- (jumpAsFunction fnIndex nextIndex)
+            | Invoke -> () // TODO: Dynamic invoke
             | Ret -> nextIndex <- returnCallerFrame()
             // Data output
             | Emit -> context.TextOutput.Add(context.PopAsResult())
@@ -398,16 +404,15 @@ module internal Core =
                         nextIndex <- index + 1
                 // Runtime exceptions handling
                 with e ->
-                    let opCodeInfo = sequence.[index].ToString() in
-                    raise (new Errors.ExecutionException(opCodeInfo, e.Message))
+                    let errorInfo: Errors.RuntimeErrorInfo = {
+                        Index = index
+                        OpCodeName = sequence.[index].ToString()
+                        Error = e
+                        Dump = this.Dump()
+                        } in raise (new Errors.ExecutionException(errorInfo))
             | None -> failwith "No instructions specified!"
 
         /// Dump register contents
-        member this.Dump() : unit =
-            let valueToString (value: Data) : string =
-                match value with
-                | Empty -> "Empty"
-                | data -> context.DataToString data
-
+        member this.Dump() : string =
             Console.WriteLine("Data dump:")
-            context.Frame.Dump()
+            context.DumpFrame()

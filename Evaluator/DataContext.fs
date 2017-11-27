@@ -2,6 +2,7 @@
 
 open System
 open System.Collections.Generic
+open System.Text
 
 /// All data context structures
 module DataContext =
@@ -64,7 +65,18 @@ module DataContext =
         member this.HasResult() = stack.Count > 0
 
         /// Dump contents of frame and all parent frames
-        member this.Dump() : unit = ()
+        member this.Dump(dumpFunc: Data -> string) : string =
+            let buffer = new StringBuilder()
+
+            buffer.AppendLine("Stack contents:") |> ignore
+            for stackItem in stack do
+                buffer.AppendLine(dumpFunc(stackItem)) |> ignore
+
+            buffer.AppendLine("Registers:") |> ignore
+            for regData in registers do
+                buffer.AppendLine(dumpFunc(regData)) |> ignore
+
+            buffer.ToString()
 
     /// Data context
     type Context(globalFrame: DataFrame) =
@@ -174,3 +186,5 @@ module DataContext =
             let data = this.PopFromStack() in do
             this.PushToStack data
             this.PushToStack data
+
+        member this.DumpFrame() = frame.Dump(this.DataToString)
