@@ -187,3 +187,7 @@ FakesAssemblies/
 GeneratedArtifacts/
 _Pvt_Extensions/
 ModelManifest.xml
+/EvaluatorTest/test_data.txt
+/EvaluatorTest/sample_qe_data.txt
+/EvaluatorTest/sample_qe.txt
+/EvaluatorTest/sample_funcs.txt

@@ -3,19 +3,10 @@
 open System
 open System.Collections.Generic
 open System.Text
+open DataTypes
 
 /// All data context structures
 module DataContext =
-    
-    /// Data value container
-    type Data =
-        | Empty
-        | Number of float
-        | Text of string
-        | Boolean of bool
-        | Date of DateTime
-        | DataArray of List<Data>
-        | DataHash of Dictionary<string, Data>
 
     /// Global/function scope data frame
     type DataFrame(parent : DataFrame option, size: int) =
@@ -93,19 +84,6 @@ module DataContext =
         /// Named results
         let namedResults = new Dictionary<string, Object>()
 
-        /// Convert value to .NET object
-        let rec convertToObject = function
-            | Empty -> null
-            | Number(num) -> num :> Object
-            | Text(txt) -> txt :> Object
-            | Boolean(bln) -> bln :> Object
-            | Date(date) -> date :> Object
-            | DataArray(arr) -> Array.ofSeq(Seq.map convertToObject arr) :> Object
-            | DataHash(hash) -> 
-                let pairs = Seq.map (fun (kv: KeyValuePair<string, Data>) ->
-                                        (kv.Key, convertToObject(kv.Value))) hash
-                in Map.ofSeq pairs :> Object
-
         member this.Frame with get() = frame and 
                                set(newFrame: DataFrame) = frame <- newFrame
 
@@ -179,7 +157,7 @@ module DataContext =
 
         /// Pop value as plain .NET object
         member this.PopAsNativeObject() : Object =
-            convertToObject(this.PopFromStack())
+            dataToNative(this.PopFromStack())
 
         /// Duplicate data on top of stack
         member this.DuplicateStackData() =

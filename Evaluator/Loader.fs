@@ -18,7 +18,7 @@ module internal Loader =
     type FnDisp = Core.FunctionDisposition
     type FnInfo = Core.FunctionInfo
     type Sequence = Core.Sequence
-    type Data = DataContext.Data
+    type Data = DataTypes.Data
 
     /// Instruction data source types with value
     type private Source =

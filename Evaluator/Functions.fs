@@ -2,6 +2,7 @@
 
 open System
 open System.Collections.Generic
+open DataTypes
 open DataContext
 
 /// Builtin functions

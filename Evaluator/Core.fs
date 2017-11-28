@@ -2,6 +2,7 @@
 
 open System
 open System.Collections.Generic
+open DataTypes
 open DataContext
 open Functions
 
@@ -362,21 +363,9 @@ module internal Core =
 
         /// Set input data
         member this.SetData (data: Dictionary<string, Object>) : unit =
-            let dateVal : DateTime ref = ref DateTime.Now
             Seq.iter (fun key ->
                 let value = data.[key]
-                let dataValue =
-                    match value with
-                    | str when (str :? string) -> Text(str :?> string)
-                    // Convert to float
-                    | num when (num :? float) -> Number(num :?> float)
-                    | num when (num :? int) -> Number(float(num :?> int))
-                    // Date
-                    | date when (date :? DateTime) -> Date(date :?> DateTime)
-                    // Boolean
-                    | bln when (bln :? bool) -> Boolean(bln :?> bool)
-                    | null -> Empty
-                    | _ -> failwith "Incorrect input data type!"
+                let dataValue = nativeToData value
                 in context.Input.Add(key, dataValue))
                 data.Keys
 
