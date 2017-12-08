@@ -4,7 +4,7 @@ open System
 open System.Collections.Generic
 
 /// Convert data to >NET object and vice versa
-module DataTypes =     
+module internal DataTypes =     
     
     /// Data value container
     type Data =

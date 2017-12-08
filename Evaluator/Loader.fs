@@ -27,11 +27,12 @@ module internal Loader =
         | Register of int
         | DataKey of string
 
-    /// Entry point token
-    let private EntryToken = ".entry"
-
-    /// Data section token
-    let private DataToken = ".data"
+    /// Script file sections
+    type private Section =
+        | Unknown
+        | SharedVars
+        | Data
+        | Code
 
     /// Get data with source type for instruction
     let private getSource (arg: string) : Source =
@@ -190,6 +191,7 @@ module internal Loader =
     /// Load instructions sequence from stream
     let Load (dataStream: Stream) : Sequence =
         // Program Information to be loaded
+        let sharedVariables = new List<string>()
         let data = new List<Data>()
         let sequence = new List<OpCode>()
         let functions = new List<FnInfo>()
@@ -204,66 +206,85 @@ module internal Loader =
         let labelRefs = new Dictionary<int, string>()
         let labelTargets = new Dictionary<string, int>()
 
-        let readingData: bool ref = ref false
+        // Currently reading section
+        let currentSection: Section ref = ref Unknown
 
         /// Read next instruction line
         let rec readNext (reader: StreamReader) (index: int) (lineNo: int) =
             let mutable isInstruction = false
 
+            // Read directive line
+            let readDirective (line: string) =
+                // Compiler directive
+                match line with
+                | ".shared" -> currentSection := SharedVars
+                | ".data" -> currentSection := Data
+                | ".defs" -> currentSection := Code
+                | ".entry" ->
+                    currentSection := Code
+                    funcAddress := -1
+                    entryInstructionIndex := index
+                | _ -> failwithf "Unknown script file section: %s!" line
+
+            // Read regular instruction
+            let readInstruction (line: string) =
+                // Regular instruction
+                isInstruction <- true
+                let (opCode, label) = translate line
+                if label.IsSome then
+                    labelRefs.Add(index, label.Value)
+                // Check frame size
+                match opCode with
+                    | OpCode.Store(regIdx) ->
+                        let currentNum = frameSizes.[funcAddress.Value]
+                        let newNum = regIdx + 1 in
+                        if newNum > currentNum then
+                            frameSizes.[funcAddress.Value] <- newNum
+                    | _ -> ()
+                sequence.Add(opCode)
+
+            // Read label/function definition
+            let readLabel (line: string) =
+                let labelName = line.Substring(0, line.Length - 1)
+                // Check if function definition
+                let dotPos = labelName.IndexOf('.') in
+                if dotPos > -1 then do
+                    let nArgs = int(labelName.Substring(dotPos + 1))
+                    let fnDefInfo : FnInfo = {
+                        Address = index;
+                        ParamsCount = nArgs
+                    }
+                    functions.Add(fnDefInfo)
+                    let fnName = labelName.Substring(0, dotPos)
+                    labelTargets.Add(fnName, index)
+                    // Initial frame size
+                    funcAddress := index
+                    frameSizes.Add(index, nArgs)
+                else
+                    labelTargets.Add(labelName, index)
+
             if not reader.EndOfStream then
                 try
                     let line = reader.ReadLine().Trim() in
                     if line.Length > 0 then
+                        // Determine term type
                         let isComment = isComment(line)
                         let isLabel = not(isComment) && isLabel(line)
                         let isDirective = isDirective(line)
 
-                        if isDirective then do
-                            // Compiler directive
-                            if line.Equals(DataToken) then
-                                readingData := true
-                            else
-                                readingData := false
-                                if line.Equals(EntryToken) then
-                                    funcAddress := -1
-                                    entryInstructionIndex := index
-                        else if readingData.Value then
+                        if isDirective then
+                            readDirective line
+                        else if currentSection.Value = Data then
                             // Constant data arrays
                             data.Add(loadConstArray(line))
+                        else if currentSection.Value = SharedVars then
+                            // Shared variable name
+                            sharedVariables.Add(line)
+                            frameSizes.[-1] <- sharedVariables.Count
                         else if not(isComment || isLabel || isDirective) then
-                            // Regular instruction
-                            isInstruction <- true
-                            let (opCode, label) = translate line
-                            if label.IsSome then
-                                labelRefs.Add(index, label.Value)
-                            // Check frame size
-                            match opCode with
-                                | OpCode.Store(regIdx) ->
-                                    let currentNum = frameSizes.[funcAddress.Value]
-                                    let newNum = regIdx + 1 in
-                                    if newNum > currentNum then
-                                        frameSizes.[funcAddress.Value] <- newNum
-                                | _ -> ()
-                            sequence.Add(opCode)
+                            readInstruction line
                         else if isLabel then do
-                            // Label
-                            let labelName = line.Substring(0, line.Length - 1)
-                            // Check if function definition
-                            let dotPos = labelName.IndexOf('.') in
-                            if dotPos > -1 then do
-                                let nArgs = int(labelName.Substring(dotPos + 1))
-                                let fnDefInfo : FnInfo = {
-                                    Address = index;
-                                    ParamsCount = nArgs
-                                }
-                                functions.Add(fnDefInfo)
-                                let fnName = labelName.Substring(0, dotPos)
-                                labelTargets.Add(fnName, index)
-                                // Initial frame size
-                                funcAddress := index
-                                frameSizes.Add(index, nArgs)
-                            else
-                                labelTargets.Add(labelName, index)
+                            readLabel line
 
                 // Loading exception handling
                 with e -> raise (new Errors.LoadException(lineNo, e.Message))
@@ -289,9 +310,11 @@ module internal Loader =
 
         // Return all information about program
         {
+            SharedVarNames = sharedVariables
             Data = data
             Functions = functions
             FrameSizes = frameSizes
             Instructions = sequence
             EntryPoint = entryInstructionIndex.Value
         }
+ 

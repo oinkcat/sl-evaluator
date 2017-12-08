@@ -6,7 +6,7 @@ open DataTypes
 open DataContext
 
 /// Builtin functions
-module Functions =
+module internal Functions =
 
     /// Random value generator
     let private random: Random = new Random()

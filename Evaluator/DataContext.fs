@@ -6,7 +6,7 @@ open System.Text
 open DataTypes
 
 /// All data context structures
-module DataContext =
+module internal DataContext =
 
     /// Global/function scope data frame
     type DataFrame(parent : DataFrame option, size: int) =
@@ -87,10 +87,13 @@ module DataContext =
         member this.Frame with get() = frame and 
                                set(newFrame: DataFrame) = frame <- newFrame
 
+        /// Input data (obsolete)
         member this.Input = input
 
+        /// Output text
         member this.TextOutput = textResults
 
+        /// Output data
         member this.NamedResults = namedResults
 
         /// Put value to stack
@@ -130,7 +133,7 @@ module DataContext =
             | Text(str) -> str
             | Boolean(bln) -> bln.ToString()
             | Date(date) -> date.ToString()
-            | Empty -> "null"
+            | Empty -> "<null>"
             | DataArray(arr) ->
                 let elemStrings = Seq.map this.DataToString arr in
                 String.Concat('[', String.Join(";", elemStrings), ']')
@@ -165,4 +168,5 @@ module DataContext =
             this.PushToStack data
             this.PushToStack data
 
+        /// Dump frame contents
         member this.DumpFrame() = frame.Dump(this.DataToString)

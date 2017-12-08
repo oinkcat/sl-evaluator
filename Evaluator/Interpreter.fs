@@ -29,19 +29,57 @@ type EvaluatorException(baseException: Exception) =
 module Interpreter =
 
     /// Evaluation results
-    type Results = { Text: List<string>; Named: Dictionary<string, Object> }
+    type Results = {
+        Text: List<string>;
+        Named: Dictionary<string, Object>
+    }
+
+    /// Interpreter frontend
+    type FrontEnd() =
+        
+        // Core reference
+        let mutable interpreter: Core.SequenceInterpreter =
+            Unchecked.defaultof<Core.SequenceInterpreter>
+
+        /// Script text output
+        member this.TextOutput = interpreter.TextResults
+
+        /// Structured data to save
+        member this.DataResults = interpreter.NamedResults
+
+        /// Load script instructions
+        member this.LoadScript(instructionsStream : Stream) : unit =
+            interpreter <- Core.SequenceInterpreter()
+            let scriptContent = Loader.Load(instructionsStream) in
+                interpreter.SetSequence(scriptContent)
+
+        /// Set all input data (obsolete)
+        member this.SetData (data: Dictionary<string, Object>) : unit =
+            interpreter.SetData data
+
+        /// Convert and get shared variable value
+        member this.GetSharedVar(name: string) : Object =
+            interpreter.Shared name
+
+        /// Convert and set shared variable value
+        member this.SetSharedVal (name: string) (value: Object) =
+            interpreter.Shared(name) <- value
+
+        /// Set callback function
+        member this.SetCallback() = ()
+
+        /// Run loaded script
+        member this.Run() = interpreter.Interpret()
     
-    /// Evaluate results based on instruction sequence and input data
+    /// Load script and evaluate data (obsolete)
     let public Evaluate (sequenceStream: Stream)
                         (data: Dictionary<string, Object>) : Results =
 
         try
-            let interpreter = Core.SequenceInterpreter()
-            let sequence = Loader.Load(sequenceStream) in do
-                interpreter.SetSequence sequence
+            let interpreter = Core.SequenceInterpreter() in do
+                interpreter.SetSequence(Loader.Load(sequenceStream))
                 interpreter.SetData data
                 interpreter.Interpret()
-
             { 
                 Text = interpreter.TextResults
                 Named = interpreter.NamedResults

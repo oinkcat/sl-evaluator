@@ -73,6 +73,7 @@ module internal Core =
 
     /// Instructions sequence
     type Sequence = {
+        SharedVarNames : List<string>
         Data : List<Data>
         Functions : List<FunctionInfo>
         FrameSizes : Dictionary<int, int>
@@ -85,6 +86,9 @@ module internal Core =
 
         /// Last comparsion result
         let mutable cmpResult : ComparsionResult = Undefined
+
+        /// Shared variable names
+        let mutable sharedVarNames : List<string> = null
 
         /// Constant data arrays
         let mutable constData : List<Data> = null
@@ -298,7 +302,24 @@ module internal Core =
             context.Frame <- context.Frame.Caller.Value
             returnAddresses.Pop()
 
+        /// Get shared variable register index
+        /// or fail if no such variable exists
+        let getSharedVarIndexCheched (name: string) : int =
+            let regIdx = sharedVarNames.IndexOf(name) in
+            if regIdx > -1
+                then regIdx
+                else failwithf "Shared variable %s not found!" name
+
         (* ******************** Instance members ******************** *)
+
+        /// Shared variables
+        member this.Shared
+            with get (name: string) : Object =
+                let regIdx = getSharedVarIndexCheched name in
+                dataToNative(context.Frame.Global.GetRegister(regIdx))
+            and set (name: string) (value: Object) =
+                let regIdx = getSharedVarIndexCheched name in
+                context.Frame.Global.SetRegister regIdx (nativeToData value)
 
         /// Result strings
         member this.TextResults with get() = context.TextOutput
@@ -372,6 +393,7 @@ module internal Core =
         /// Set instructions sequence to interpret
         member this.SetSequence (program : Sequence) : unit =
             programModule <- Some(program)
+            sharedVarNames <- program.SharedVarNames
             constData <- program.Data
             functions <- program.Functions
             functionFrameSizes <- program.FrameSizes

@@ -52,17 +52,24 @@ module main =
             let data = match dataFile with
                        | Some(fileName) -> loadDataFile fileName
                        | None -> new Dictionary<string, Object>()
-            let results = Interpreter.Evaluate fileStream data in do
+
+            // Interpreter frontend
+            let interpreter = Interpreter.FrontEnd() in do
+                interpreter.LoadScript fileStream
+                interpreter.SetData data
+                interpreter.Run()
+
             // Output results
-            Console.WriteLine()
-            Console.WriteLine("Results:")
-            results.Text |> Seq.iter Console.WriteLine
+            if interpreter.TextOutput.Count > 0 then do
+                Console.WriteLine()
+                Console.WriteLine("Results:")
+                interpreter.TextOutput |> Seq.iter Console.WriteLine
             // Output named results
-            Console.WriteLine()
-            Console.WriteLine("Named results:")
-            results.Named.Keys
-            |> Seq.iter (fun key -> let value = results.Named.[key] in
-                                    Console.WriteLine("{0}: {1}", key, value))
+            if interpreter.DataResults.Count > 0 then do
+                Console.WriteLine()
+                Console.WriteLine("Named results:")
+                interpreter.DataResults
+                |> Seq.iter (fun kv -> printf "%s: %A" kv.Key kv.Value)
         with e -> do
             Console.ForegroundColor <- ConsoleColor.Red
             Console.WriteLine(e.Message)
