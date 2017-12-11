@@ -3,6 +3,7 @@
 open System
 open System.IO
 open System.Collections.Generic
+open System.Diagnostics
 open Evaluator
 
 /// Interpreter test app
@@ -43,7 +44,7 @@ module main =
         let dataFile = if args.Length > 2 then Some(args.[2].Trim('"'))
                                           else None
         if dataFile.IsSome then
-            Console.WriteLine("Data file: {0}", dataFile)
+            Console.WriteLine("Data file: {0}", dataFile.Value)
 
         // Interpret instructions and dump results
         try
@@ -52,6 +53,10 @@ module main =
             let data = match dataFile with
                        | Some(fileName) -> loadDataFile fileName
                        | None -> new Dictionary<string, Object>()
+
+            // Measure time
+            let watch = new Stopwatch() in
+            watch.Start()
 
             // Interpreter frontend
             let interpreter = Interpreter.FrontEnd() in do
@@ -70,6 +75,12 @@ module main =
                 Console.WriteLine("Named results:")
                 interpreter.DataResults
                 |> Seq.iter (fun kv -> printf "%s: %A" kv.Key kv.Value)
+
+            // Time elapsed
+            watch.Stop()
+            let elapsed = watch.Elapsed in do
+            Console.WriteLine()
+            printf "Execution time: %A" elapsed
         with e -> do
             Console.ForegroundColor <- ConsoleColor.Red
             Console.WriteLine(e.Message)

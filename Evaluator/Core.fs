@@ -32,7 +32,7 @@ module internal Core =
     type ComparsionResult = IsLess | IsEqual | IsGreater | Undefined
 
     /// Function type and access information
-    type FunctionDisposition = Extern of string | Defined of int
+    type FunctionDisposition = Extern of FuncType | Defined of int
 
     /// Instruction opcode
     type OpCode =
@@ -107,6 +107,9 @@ module internal Core =
 
         /// Sequence to interpret (module ?)
         let mutable programModule: Sequence option = None
+
+        /// Current instruction index
+        let mutable index: int = 0
 
         /// Set comparsion result
         let setCmpResult (result : int) :unit =
@@ -327,60 +330,70 @@ module internal Core =
         /// Named results
         member this.NamedResults with get() = context.NamedResults
 
-        /// Execute one instruction and return next index
-        member private this.ExecuteInstruction (instruction: OpCode)
-                                               (index: int) : int =
-            let mutable nextIndex = index + 1 in
-            match instruction with
-            // Data handling
-            | LoadStr str -> context.PushToStack(Text(str))
-            | LoadNum num -> context.PushToStack(Number(num))
-            | LoadReg regIndex ->
-                let registerValue = context.Frame.GetRegister(regIndex) in
-                    context.PushToStack registerValue
-            | LoadRegGlobal regIndex ->
-                let globalGet = context.Frame.Global.GetRegister in
-                    context.PushToStack (globalGet(regIndex))
-            | LoadData key -> context.PushToStack context.Input.[key]
-            | LoadDataArray idx -> context.PushToStack constData.[idx]
-            | LoadConst name -> context.PushToStack (getConstant name)
-            | Duplicate -> context.DuplicateStackData()
-            | Unload -> context.PopFromStack() |> ignore
-            | Store regIndex ->
-                let dataToStore = context.PopFromStack() in
-                    context.Frame.SetRegister regIndex dataToStore
-            | StoreGlobal regIndex ->
-                let globalSet = context.Frame.Global.SetRegister in
-                    globalSet regIndex (context.PopFromStack())
-            | Reset regIndex -> context.Frame.SetRegister regIndex Empty
-            // Arrays/hashes
-            | MakeArray elemCount -> makeElemsArray elemCount
-            | MakeHash elemCount -> makeElemsHash elemCount
-            | ArrayGet -> let elem = getArrayElem() in context.PushToStack elem
-            | ArraySet -> setArrayElem()
-            | ArraySetMath op -> setArrayElemWithMath op
-            // Operators
-            | Math op -> performMath op
-            | String op -> performString op
-            | Compare op -> performCompare op
-            | Logic op -> performLogic op
-            // Flow control
-            | Jump newIndex -> nextIndex <- newIndex
-            | CondJump (jumpType, newIndex) -> if checkCanJump jumpType
-                                                then nextIndex <- newIndex
-            | Call disp -> 
-                match disp with
-                | Extern name -> callFunction name context
-                | Defined fnIndex -> nextIndex <- (jumpAsFunction fnIndex nextIndex)
-            | Invoke -> () // TODO: Dynamic invoke
-            | Ret -> nextIndex <- returnCallerFrame()
-            // Data output
-            | Emit -> context.TextOutput.Add(context.PopAsResult())
-            | EmitNamed key ->
-                let value: Object = context.PopAsNativeObject() in
-                context.NamedResults.Add(key, value)
-            // | _ -> failwithf "Unsupported opcode: %s!" (instruction.ToString())
-            nextIndex
+        /// Execute sequence of instruction opcodes
+        member this.ExecuteSequence (program : Sequence) =
+            index <- program.EntryPoint
+
+            let seqLength = program.Instructions.Count in
+
+            while index < seqLength do
+                let mutable nextIndex = index + 1
+                let instruction = program.Instructions.[index] in
+
+                match instruction with
+                // Data handling
+                | LoadStr str -> context.PushToStack(Text(str))
+                | LoadNum num -> context.PushToStack(Number(num))
+                | LoadReg regIndex ->
+                    let registerValue = context.Frame.GetRegister(regIndex) in
+                        context.PushToStack registerValue
+                | LoadRegGlobal regIndex ->
+                    let globalGet = context.Frame.Global.GetRegister in
+                        context.PushToStack (globalGet(regIndex))
+                | LoadData key -> context.PushToStack context.Input.[key]
+                | LoadDataArray idx -> context.PushToStack constData.[idx]
+                | LoadConst name -> context.PushToStack (getConstant name)
+                | Duplicate -> context.DuplicateStackData()
+                | Unload -> context.PopFromStack() |> ignore
+                | Store regIndex ->
+                    let dataToStore = context.PopFromStack() in
+                        context.Frame.SetRegister regIndex dataToStore
+                | StoreGlobal regIndex ->
+                    let globalSet = context.Frame.Global.SetRegister in
+                        globalSet regIndex (context.PopFromStack())
+                | Reset regIndex -> context.Frame.SetRegister regIndex Empty
+
+                // Arrays/hashes
+                | MakeArray elemCount -> makeElemsArray elemCount
+                | MakeHash elemCount -> makeElemsHash elemCount
+                | ArrayGet -> let elem = getArrayElem() in context.PushToStack elem
+                | ArraySet -> setArrayElem()
+                | ArraySetMath op -> setArrayElemWithMath op
+
+                // Operators
+                | Math op -> performMath op
+                | String op -> performString op
+                | Compare op -> performCompare op
+                | Logic op -> performLogic op
+
+                // Flow control
+                | Jump newIndex -> nextIndex <- newIndex
+                | CondJump (jumpType, newIndex) -> if checkCanJump jumpType
+                                                    then nextIndex <- newIndex
+                | Call disp -> 
+                    match disp with
+                    | Extern func -> func context
+                    | Defined fnIndex -> nextIndex <- (jumpAsFunction fnIndex nextIndex)
+                | Invoke -> () // TODO: Dynamic invoke
+                | Ret -> nextIndex <- returnCallerFrame()
+
+                // Data output
+                | Emit -> context.TextOutput.Add(context.PopAsResult())
+                | EmitNamed key ->
+                    let value: Object = context.PopAsNativeObject() in
+                    context.NamedResults.Add(key, value)
+
+                index <- nextIndex
 
         /// Set input data
         member this.SetData (data: Dictionary<string, Object>) : unit =
@@ -403,21 +416,13 @@ module internal Core =
         member this.Interpret() : unit =
             match programModule with
             | Some(program) ->
-                let sequence = program.Instructions
-                let seqLength = sequence.Count
-                let mutable index = program.EntryPoint
-                let mutable nextIndex = index + 1 in
-
                 try
-                    while index < seqLength do
-                        let instruction = sequence.[index] in
-                        index <- this.ExecuteInstruction instruction index
-                        nextIndex <- index + 1
-                // Runtime exceptions handling
+                    this.ExecuteSequence program
                 with e ->
+                    // Runtime exceptions handling
                     let errorInfo: Errors.RuntimeErrorInfo = {
                         Index = index
-                        OpCodeName = sequence.[index].ToString()
+                        OpCodeName = program.Instructions.[index].ToString()
                         Error = e
                         Dump = this.Dump()
                         } in raise (new Errors.ExecutionException(errorInfo))

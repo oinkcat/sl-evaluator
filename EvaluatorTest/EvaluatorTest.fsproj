@@ -22,7 +22,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
     <DocumentationFile>bin\Debug\EvaluatorTest.XML</DocumentationFile>
-    <StartArguments>"E:\WSL Shared\compiler_service\use_shared.lb"</StartArguments>
+    <StartArguments>"C:\Users\softc\Documents\Visual Studio 2015\Projects\CustomForms\CustomFormsTest\Storage\Instructions\zin\main.lb" "C:\Users\softc\Documents\Visual Studio 2015\Projects\Evaluator\EvaluatorTest\test_data_zin.txt"</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -51,14 +51,6 @@
   <Import Project="$(FSharpTargetsPath)" />
   <ItemGroup>
     <Compile Include="main.fs" />
-    <Content Include="sample_funcs.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="sample_qe.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="sample_qe_data.txt" />
-    <Content Include="test_data.txt" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />

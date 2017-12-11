@@ -4,8 +4,8 @@ open System
 open System.Collections.Generic
 
 /// Convert data to >NET object and vice versa
-module internal DataTypes =     
-    
+module internal DataTypes =
+
     /// Data value container
     type Data =
         | Empty
@@ -15,6 +15,40 @@ module internal DataTypes =
         | Date of DateTime
         | DataArray of List<Data>
         | DataHash of Dictionary<string, Data>
+        | Iterator of IteratorInfo
+
+    /// Perform iteration on array/hash
+    and IteratorInfo(iterable: Data) =
+
+        let mutable target: Data = iterable
+
+        let hashKeys: (string array) option =
+            match target with
+            | DataHash hash -> Some(Array.ofSeq hash.Keys)
+            | _ -> None
+
+        let mutable index: int = 0
+
+        let elementsCount: int =
+            match target with
+            | DataArray arr -> arr.Count
+            | DataHash hash -> hash.Count
+            | other -> 1
+
+        let mutable atEnd: bool = elementsCount = 0
+
+        /// Get next element
+        member this.Iterate() : Data =
+            let itemIndex = index in
+            index <- index + 1
+
+            match target with
+            | DataArray arr -> arr.[itemIndex]
+            | DataHash hash -> Text hashKeys.Value.[itemIndex]
+            | other -> other
+
+        /// Has next element
+        member this.HasNext with get() : bool = index < elementsCount
 
     /// Convert value to .NET object
     let rec dataToNative = function
@@ -28,6 +62,7 @@ module internal DataTypes =
             let pairs = Seq.map (fun (kv: KeyValuePair<string, Data>) ->
                                     (kv.Key, dataToNative(kv.Value))) hash
             in Map.ofSeq pairs :> Object
+        | Iterator(info) -> upcast(info) // Unchanged
 
     // Convert .NET object to Data
     let rec nativeToData (value: Object) : Data =

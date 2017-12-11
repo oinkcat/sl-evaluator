@@ -148,7 +148,10 @@ module internal Loader =
                         else OpCode.EmitNamed(argument |> asText)
             // Function call/return
             | "call" -> if argument.Length > 0
-                        then OpCode.Call(FnDisp.Extern(argument.ToLower()))
+                        then
+                            let name = argument.ToLower()
+                            let fnIndex = Functions.resolveFunctionName name
+                            OpCode.Call(FnDisp.Extern(fnIndex))
                         else failwith "Function name required!"
             | "invoke" -> OpCode.Call(FnDisp.Defined -1)
             | "ret" -> OpCode.Ret

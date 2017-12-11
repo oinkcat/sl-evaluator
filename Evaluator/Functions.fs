@@ -8,6 +8,9 @@ open DataContext
 /// Builtin functions
 module internal Functions =
 
+    /// Native function type
+    type FuncType = (Context -> unit)
+
     /// Random value generator
     let private random: Random = new Random()
 
@@ -106,6 +109,12 @@ module internal Functions =
     let private fn_rand (ctx: Context) =
         let result = random.NextDouble() in
         ctx.PushToStack(Number result)
+
+    let private fn_round (ctx : Context) =
+        let numDecimals = ctx.PopNumberFromStack()
+        let number = ctx.PopNumberFromStack()
+        let result = Math.Round(number, int(numDecimals)) in
+        ctx.PushToStack(Number result)
     
     let private fn_sin (ctx: Context) =
         let number = ctx.PopNumberFromStack()
@@ -140,38 +149,73 @@ module internal Functions =
                         | Date _ -> "date"
                         | DataArray _ -> "array"
                         | DataHash _ -> "hash"
+                        | Iterator _ -> "iterator"
                         | Empty -> "null"
                         in ctx.PushToStack(Text typeName)
 
-    /// Invoke named function
-    let callFunction (name: string) (ctx: Context) =
-        match name with
+    let private fn_iter_create (ctx: Context) =
+        let target = ctx.PopFromStack()
+        let iterInstance = IteratorInfo(target) in
+        ctx.PushToStack(Iterator iterInstance)
+
+    let private fn_iter_hasnext (ctx: Context) =
+        match ctx.PopFromStack() with
+        | Iterator info -> ctx.PushToStack(Boolean(info.HasNext))
+        | _ -> failwith "Expected: iterator!"
+
+    let private fn_iter_next_elem (ctx: Context) =
+        match ctx.PopFromStack() with
+        | Iterator info -> ctx.PushToStack(info.Iterate())
+        | _ -> failwith "Expected: iterator!"
+
+    let private fn_rangearray (ctx: Context) =
+        let toNumber = ctx.PopNumberFromStack()
+        let fromNumber = ctx.PopNumberFromStack()
+        let step = if fromNumber <= toNumber then 1.0 else -1.0
+        let items = Seq.map (fun n -> Number n)
+                            [fromNumber .. step .. toNumber]
+        let array = new List<Data>(items) in
+        ctx.PushToStack(DataArray array)
+
+    let private allFunctionInfo =  [ 
         // Math
-        | "abs" -> fn_abs ctx
-        | "int" -> fn_int ctx
-        | "fract" -> fn_fract ctx
-        | "sqrt" -> fn_sqrt ctx
-        | "pow" -> fn_pow ctx
-        | "sin" -> fn_sin ctx
-        | "cos" -> fn_cos ctx
-        | "tan" -> fn_tan ctx
-        | "rand" -> fn_rand ctx
+        ("abs", fn_abs)
+        ("int", fn_int)
+        ("fract", fn_fract)
+        ("sqrt", fn_sqrt)
+        ("pow", fn_pow)
+        ("sin", fn_sin)
+        ("cos", fn_cos)
+        ("tan", fn_tan)
+        ("rand", fn_rand)
+        ("round", fn_round)
         // Type conversion
-        | "tonumber" -> fn_tonumber ctx
-        | "todate" -> fn_todate ctx
+        ("tonumber", fn_tonumber)
+        ("todate", fn_todate)
         // Type checking
-        | "defined" -> fn_defined ctx
-        | "type" -> fn_type ctx
+        ("defined", fn_defined)
+        ("type", fn_type)
         // Data access
-        | "$" -> fn__data_ ctx
+        ("$", fn__data_)
         // Date functions
-        | "datenow" -> fn_datenow ctx
-        | "datediff" -> fn_datediff ctx
+        ("datenow", fn_datenow)
+        ("datediff", fn_datediff)
         // Array functions
-        | "length" -> fn_length ctx
-        | "append" -> fn_append ctx
-        | "find" -> fn_find ctx
-        | "delete" -> fn_delete ctx
+        ("length", fn_length)
+        ("add", fn_append)
+        ("find", fn_find)
+        ("delete", fn_delete)
+        ("rangearray", fn_rangearray)
+        // Iterator functions
+        ("_iter_create$", fn_iter_create)
+        ("_iter_hasnext$", fn_iter_hasnext)
+        ("_iter_next$", fn_iter_next_elem)
         // Other
-        | "format" -> fn_format ctx
-        | _ -> failwithf "Unknown function %s!" name
+        ("format", fn_format)]
+
+    let private allFunctions: (Context -> unit) list =
+        List.map snd allFunctionInfo
+
+    let resolveFunctionName (name: string) : FuncType =
+        let funcInfo = List.find (fun t -> (fst t) = name) allFunctionInfo in
+        snd funcInfo

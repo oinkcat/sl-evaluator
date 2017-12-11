@@ -12,11 +12,10 @@ module internal DataContext =
     type DataFrame(parent : DataFrame option, size: int) =
 
         /// Data stack
-        let stack = new Stack<Data>()
+        let stack = new Stack<Data>(10)
 
         /// Data registers
-        let registers: Data array =
-            List.toArray (List.map (fun _ -> Data.Empty) [1..size])
+        let registers: Data array = Array.zeroCreate size
 
         /// Caller data frame
         let parentFrame = parent
@@ -133,7 +132,7 @@ module internal DataContext =
             | Text(str) -> str
             | Boolean(bln) -> bln.ToString()
             | Date(date) -> date.ToString()
-            | Empty -> "<null>"
+            | Empty -> "null"
             | DataArray(arr) ->
                 let elemStrings = Seq.map this.DataToString arr in
                 String.Concat('[', String.Join(";", elemStrings), ']')
@@ -143,6 +142,7 @@ module internal DataContext =
                                     String.Concat(kv.Key, ':', repr))
                                     hash in
                 String.Concat('[', String.Join(";", elemStrings), ']')
+            | Iterator info -> String.Concat("<Forward iterator>")
 
         /// Pop value from stack and convert to string
         member this.PopAsResult() = this.DataToString(this.PopFromStack())
@@ -157,6 +157,7 @@ module internal DataContext =
             | Date(date) -> date.Year > 1 || date.Month > 1 || date.Day > 1
             | DataArray(arr) -> arr.Count > 0
             | DataHash(hash) -> hash.Count > 0
+            | Iterator info -> info.HasNext
 
         /// Pop value as plain .NET object
         member this.PopAsNativeObject() : Object =
