@@ -14,11 +14,20 @@ module internal Functions =
     /// Function information
     type FuncInfo = string * FuncType * int
 
+    /// Represent module contents
+    type ModuleContents = (string list) * (string list)
+
     /// Native defined functions and constants
     type INativeModule =
 
         /// Name of module
         abstract member Name: string
+
+        /// Names of all constants
+        abstract member ConstantNames: string list
+
+        /// Names of all functions
+        abstract member FunctionNames: string list
 
         /// Get constant value by it's name
         abstract member GetConstantByName: string -> Data
@@ -197,7 +206,15 @@ module internal Functions =
             let array = new List<Data>(items) in
             ctx.PushToStack(DataArray array)
 
-        let allFunctionInfo : FuncInfo list =  [ 
+        let allConstantsInfo : Map<string, Data> =
+            Map.ofList [
+                ("null", Empty)
+                ("true", Boolean(true))
+                ("false", Boolean(false))
+                ("pi", Number(Math.PI))
+                ("e", Number(Math.E))]
+
+        let allFunctionsInfo : FuncInfo list =  [ 
             // Math
             ("abs", fn_abs, 1)
             ("int", fn_int, 1)
@@ -240,26 +257,33 @@ module internal Functions =
         let secondOfThree (_, second, _) = second
 
         let allFunctions: (Context -> unit) list =
-            List.map secondOfThree allFunctionInfo
+            List.map secondOfThree allFunctionsInfo
 
         interface INativeModule with
+
             /// Module name
             member this.Name: string = builtinModuleName
 
+            /// All constants
+            member this.ConstantNames
+                with get() = List.map fst (Map.toList allConstantsInfo)
+
+            /// All functions
+            member this.FunctionNames
+                with get() = List.map (fun (name, _, argc) ->
+                                        String.Concat(name, '.', argc))
+                                      allFunctionsInfo
+
             /// Get constant value by it's name
             member this.GetConstantByName(name: string) : Data =
-                match name with
-                | "null" -> Empty
-                | "true" -> Boolean(true)
-                | "false" -> Boolean(false)
-                | "pi" -> Number(Math.PI)
-                | "e" -> Number(Math.E)
-                | _ -> failwithf "Invalid constant name: %s!" name
+                if allConstantsInfo.ContainsKey(name)
+                    then allConstantsInfo.[name]
+                    else failwithf "Invalid constant name: %s!" name
 
             /// Get function by it's name
             member this.GetFunctionByName(name: string) : FuncType =
                 let funcInfo = List.find (fun t -> (firstOfThree t) = name)
-                                                   allFunctionInfo in
+                                                   allFunctionsInfo in
                 secondOfThree funcInfo
 
     /// All available modules
@@ -283,3 +307,11 @@ module internal Functions =
     /// Get function by it's name
     let resolveFunction (moduleName: string) (name: string) : FuncType =
         getModuleByName(moduleName).GetFunctionByName(name)
+
+    /// Get names of all modules
+    let getModuleNames() : string list = List.ofSeq loadedModules.Keys
+
+    /// Get module contents
+    let getModuleContents(moduleName: string) : ModuleContents =
+        let nativeModule = getModuleByName moduleName in
+        (nativeModule.ConstantNames, nativeModule.FunctionNames)

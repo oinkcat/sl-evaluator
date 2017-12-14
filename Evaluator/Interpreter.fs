@@ -72,6 +72,16 @@ module Interpreter =
 
         /// Run loaded script
         member this.Run() = interpreter.Interpret()
+
+    /// Get names of all loaded native modules
+    let public GetModuleNames() : string list =
+        Functions.initializeModules()
+        Functions.getModuleNames()
+
+    /// Get names of all constants/functions from module with given name
+    let public GetModuleContents(name: string) : string list * string list =
+        Functions.initializeModules()
+        Functions.getModuleContents(name)
     
     /// Load script and evaluate data (obsolete)
     let public Evaluate (sequenceStream: Stream)

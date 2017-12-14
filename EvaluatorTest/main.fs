@@ -4,10 +4,18 @@ open System
 open System.IO
 open System.Collections.Generic
 open System.Diagnostics
+open System.Text.RegularExpressions
 open Evaluator
 
 /// Interpreter test app
 module main =
+
+    /// Command to execute
+    type Command =
+        | ShowUsage
+        | ExecuteScript of string * (string option)
+        | WriteModules
+        | WriteDefinitions of string
 
     /// Load data from file
     let loadDataFile (name: string) : Dictionary<string, Object> =
@@ -30,27 +38,42 @@ module main =
 
         dataDict
 
-    // Entry point
-    Console.WriteLine("Interpreter test")
-    Console.WriteLine()
+    /// Get command from command line
+    let parseCommandLine() : Command =
+        try
+            let args: string array = Environment.GetCommandLineArgs()
+            if args.Length > 1 then
+                match args.[1].ToLower() with
+                | "-d" -> WriteDefinitions args.[2]
+                | "-m" -> WriteModules
+                | invalid when invalid.StartsWith("-") ->
+                    ShowUsage
+                | other ->
+                    let scriptFileName = other
+                    if args.Length > 2
+                        then ExecuteScript (scriptFileName, Some (args.[2]))
+                        else ExecuteScript (scriptFileName, None)
+            else
+                ShowUsage
+        with | _ -> ShowUsage
+          
+    /// Show command usage      
+    let showUsage() =
+        printf "usage: EvaluatorTest -d <module> | <file> [<data-file>]"
 
-    let args: string array = Environment.GetCommandLineArgs()
+    /// Execute script file
+    let executeScript (fileName: string) (dataFileName: string option) =
 
-    if args.Length > 1 then do
-        let instructionsFile = args.[1].Trim('"')
+        Console.WriteLine("Instructions file: {0}", fileName)
 
-        Console.WriteLine("Instructions file: {0}", instructionsFile)
-
-        let dataFile = if args.Length > 2 then Some(args.[2].Trim('"'))
-                                          else None
-        if dataFile.IsSome then
-            Console.WriteLine("Data file: {0}", dataFile.Value)
+        if dataFileName.IsSome then
+            Console.WriteLine("Data file: {0}", dataFileName.Value)
 
         // Interpret instructions and dump results
         try
-            use fileStream = File.Open(instructionsFile, FileMode.Open)
+            use fileStream = File.Open(fileName, FileMode.Open)
             // Load data file
-            let data = match dataFile with
+            let data = match dataFileName with
                        | Some(fileName) -> loadDataFile fileName
                        | None -> new Dictionary<string, Object>()
 
@@ -85,7 +108,37 @@ module main =
             Console.ForegroundColor <- ConsoleColor.Red
             Console.WriteLine(e.Message)
             Console.WriteLine(e.StackTrace)
-    else
-        Console.Error.WriteLine("usage: EvaluatorTest <file> [<data-file>]")
 
-    Console.ReadKey() |> ignore
+    /// Write available module names and exit
+    let writeModuleNames() =
+        printfn "Available modules:"
+        List.iter (fun (name: string) -> Console.WriteLine(name))
+                  (Evaluator.Interpreter.GetModuleNames())
+
+    /// Write module contents and exit
+    let writeModuleContents (moduleName: string) =
+        printfn "Module %s contents:" moduleName
+
+        let (constants, functions) =
+            Evaluator.Interpreter.GetModuleContents(moduleName) in
+
+        Console.WriteLine("# Constants")
+        List.iter (fun (name: string) -> Console.WriteLine(name)) constants
+
+        Console.WriteLine("# Functions")
+        List.iter (fun (name: string) -> Console.WriteLine(name)) functions
+
+    // Entry point
+    Console.WriteLine("Scripting lang interpreter")
+    Console.WriteLine()
+
+    match parseCommandLine() with
+        | ShowUsage -> showUsage()
+        | ExecuteScript (file, dataFile) -> executeScript file dataFile
+        | WriteModules -> writeModuleNames()
+        | WriteDefinitions modName -> writeModuleContents modName
+
+    if Debugger.IsAttached then
+        Console.WriteLine()
+        Console.WriteLine("Press any key to finish debugging...")
+        Console.ReadKey() |> ignore
