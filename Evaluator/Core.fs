@@ -41,7 +41,7 @@ module internal Core =
         | LoadReg of int
         | LoadData of string
         | LoadRegGlobal of int
-        | LoadConst of string
+        | LoadConst of Data
         | LoadDataArray of int
         | Duplicate
         | Unload
@@ -274,16 +274,6 @@ module internal Core =
                     // arrayItem[index] = _result
                     setArrayElem()
 
-        /// Get constant value
-        let getConstant (name: string) : Data =
-            match name with
-            | "null" -> Empty
-            | "true" -> Boolean(true)
-            | "false" -> Boolean(false)
-            | "pi" -> Number(Math.PI)
-            | "e" -> Number(Math.E)
-            | _ -> failwithf "Invalid constant name: %s!" name
-
         /// Create function frame and store return address
         let jumpAsFunction(address : int) (currentAddress : int) =
             let numOfVars: int = functionFrameSizes.[address]
@@ -352,7 +342,7 @@ module internal Core =
                         context.PushToStack (globalGet(regIndex))
                 | LoadData key -> context.PushToStack context.Input.[key]
                 | LoadDataArray idx -> context.PushToStack constData.[idx]
-                | LoadConst name -> context.PushToStack (getConstant name)
+                | LoadConst value -> context.PushToStack value
                 | Duplicate -> context.DuplicateStackData()
                 | Unload -> context.PopFromStack() |> ignore
                 | Store regIndex ->

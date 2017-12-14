@@ -22,7 +22,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
     <DocumentationFile>bin\Debug\EvaluatorTest.XML</DocumentationFile>
-    <StartArguments>"C:\Users\softc\Documents\Visual Studio 2015\Projects\CustomForms\CustomFormsTest\Storage\Instructions\zin\main.lb" "C:\Users\softc\Documents\Visual Studio 2015\Projects\Evaluator\EvaluatorTest\test_data_zin.txt"</StartArguments>
+    <StartArguments>"E:\WSL Shared\compiler_service\bench\bench_compute.lb"</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>

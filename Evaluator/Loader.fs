@@ -121,7 +121,11 @@ module internal Loader =
             | "load.const" -> let dataIdx : int ref = ref 0 in
                               if Int32.TryParse(argument, dataIdx)
                                   then OpCode.LoadDataArray dataIdx.Value
-                                  else OpCode.LoadConst argument
+                                  else
+                                    let modName = String.Empty // TEMPORARY
+                                    let value = Functions.resolveConstant modName 
+                                                                          argument in
+                                    OpCode.LoadConst (value)
             | "dup" -> OpCode.Duplicate
             | "unload" when no(argument) -> OpCode.Unload
             | "store" -> OpCode.Store(argument |> asNumber)
@@ -149,9 +153,10 @@ module internal Loader =
             // Function call/return
             | "call" -> if argument.Length > 0
                         then
+                            let modName = String.Empty // TEMPORARY
                             let name = argument.ToLower()
-                            let fnIndex = Functions.resolveFunctionName name
-                            OpCode.Call(FnDisp.Extern(fnIndex))
+                            let func = Functions.resolveFunction modName name
+                            OpCode.Call(FnDisp.Extern func)
                         else failwith "Function name required!"
             | "invoke" -> OpCode.Call(FnDisp.Defined -1)
             | "ret" -> OpCode.Ret

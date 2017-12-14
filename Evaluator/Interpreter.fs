@@ -37,6 +37,8 @@ module Interpreter =
     /// Interpreter frontend
     type FrontEnd() =
         
+        do Functions.initializeModules()
+
         // Core reference
         let mutable interpreter: Core.SequenceInterpreter =
             Unchecked.defaultof<Core.SequenceInterpreter>
@@ -74,6 +76,9 @@ module Interpreter =
     /// Load script and evaluate data (obsolete)
     let public Evaluate (sequenceStream: Stream)
                         (data: Dictionary<string, Object>) : Results =
+
+        // Load extension modules
+        Functions.initializeModules()
 
         try
             let interpreter = Core.SequenceInterpreter() in do
