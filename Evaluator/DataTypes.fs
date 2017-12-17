@@ -49,7 +49,7 @@ module internal DataTypes =
 
         /// Has next element
         member this.HasNext with get() : bool = index < elementsCount
-
+ 
     /// Convert value to .NET object
     let rec dataToNative = function
         | Empty -> null

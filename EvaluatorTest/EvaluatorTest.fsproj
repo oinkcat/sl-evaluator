@@ -22,7 +22,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
     <DocumentationFile>bin\Debug\EvaluatorTest.XML</DocumentationFile>
-    <StartArguments>"E:\WSL Shared\compiler_service\bench\bench_compute.lb"</StartArguments>
+    <StartArguments>"E:\WSL Shared\compiler_service\tests\arrays.lb"</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>

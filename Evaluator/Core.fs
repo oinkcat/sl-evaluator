@@ -140,6 +140,10 @@ module internal Core =
                     match item2 with
                     | Date(date2) -> date1.CompareTo(date2)
                     | _ -> 0
+                | Empty ->
+                    match item2 with
+                    | Empty -> 0
+                    | _ -> -1
                 | _ -> 0
             in setCmpResult result
 

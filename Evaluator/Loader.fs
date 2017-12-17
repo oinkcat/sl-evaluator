@@ -154,7 +154,7 @@ module internal Loader =
             | "call" -> if argument.Length > 0
                         then
                             let modName = String.Empty // TEMPORARY
-                            let name = argument.ToLower()
+                            let name = argument
                             let func = Functions.resolveFunction modName name
                             OpCode.Call(FnDisp.Extern func)
                         else failwith "Function name required!"

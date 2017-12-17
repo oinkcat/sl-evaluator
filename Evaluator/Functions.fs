@@ -100,8 +100,13 @@ module internal Functions =
     
         let fn_find (ctx: Context) =
             let elemToFind: Data = ctx.PopFromStack()
-            let array = ctx.PopArrayFromStack() in
-            () // TODO!!!
+            match ctx.PopFromStack() with
+            | DataArray arr ->
+                let found = Seq.tryFind (fun item -> item = elemToFind) arr in
+                if found.IsSome
+                    then ctx.PushToStack(found.Value)
+                    else ctx.PushToStack Empty
+            | _ -> failwithf "Expected: array!"
     
         let fn_format (ctx: Context) =
             let fmtParams: string = ctx.PopAsResult()
@@ -216,39 +221,39 @@ module internal Functions =
 
         let allFunctionsInfo : FuncInfo list =  [ 
             // Math
-            ("abs", fn_abs, 1)
-            ("int", fn_int, 1)
-            ("fract", fn_fract, 1)
-            ("sqrt", fn_sqrt, 1)
-            ("pow", fn_pow, 2)
-            ("sin", fn_sin, 1)
-            ("cos", fn_cos, 1)
-            ("tan", fn_tan, 1)
-            ("rand", fn_rand, 1)
-            ("round", fn_round, 2)
+            ("Abs", fn_abs, 1)
+            ("Int", fn_int, 1)
+            ("Fract", fn_fract, 1)
+            ("Sqrt", fn_sqrt, 1)
+            ("Pow", fn_pow, 2)
+            ("Sin", fn_sin, 1)
+            ("Cos", fn_cos, 1)
+            ("Tan", fn_tan, 1)
+            ("Rand", fn_rand, 1)
+            ("Round", fn_round, 2)
             // Type conversion
-            ("tonumber", fn_tonumber, 1)
-            ("todate", fn_todate, 1)
+            ("ToNumber", fn_tonumber, 1)
+            ("ToDate", fn_todate, 1)
             // Type checking
-            ("defined", fn_defined, 1)
-            ("type", fn_type, 1)
+            ("Defined", fn_defined, 1)
+            ("Type", fn_type, 1)
             // Data access
             ("$", fn__data_, 1)
             // Date functions
-            ("datenow", fn_datenow, 0)
-            ("datediff", fn_datediff, 3)
+            ("DateNow", fn_datenow, 0)
+            ("DateDiff", fn_datediff, 3)
             // Array functions
-            ("length", fn_length, 1)
-            ("add", fn_append, 2)
-            ("find", fn_find, 2)
-            ("delete", fn_delete, 2)
-            ("rangearray", fn_rangearray, 2)
+            ("Length", fn_length, 1)
+            ("Add", fn_append, 2)
+            ("Find", fn_find, 2)
+            ("Delete", fn_delete, 2)
+            ("RangeArray", fn_rangearray, 2)
             // Iterator functions
             ("_iter_create$", fn_iter_create, 1)
             ("_iter_hasnext$", fn_iter_hasnext, 1)
             ("_iter_next$", fn_iter_next_elem, 1)
             // Other
-            ("format", fn_format, 2)]
+            ("Format", fn_format, 2)]
 
         /// Get first element of 3-tuple
         let firstOfThree (first, _, _) = first

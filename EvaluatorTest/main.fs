@@ -48,8 +48,7 @@ module main =
                 | "-m" -> WriteModules
                 | invalid when invalid.StartsWith("-") ->
                     ShowUsage
-                | other ->
-                    let scriptFileName = other
+                | scriptFileName ->
                     if args.Length > 2
                         then ExecuteScript (scriptFileName, Some (args.[2]))
                         else ExecuteScript (scriptFileName, None)
