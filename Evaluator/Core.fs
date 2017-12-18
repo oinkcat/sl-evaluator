@@ -4,7 +4,7 @@ open System
 open System.Collections.Generic
 open DataTypes
 open DataContext
-open Functions
+open ExtensionTypes
 
 /// Main functionality
 module internal Core =

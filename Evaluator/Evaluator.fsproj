@@ -45,7 +45,9 @@
     <Compile Include="Errors.fs" />
     <Compile Include="DataTypes.fs" />
     <Compile Include="DataContext.fs" />
-    <Compile Include="Functions.fs" />
+    <Compile Include="ExtensionTypes.fs" />
+    <Compile Include="BuiltinFunctions.fs" />
+    <Compile Include="Modules.fs" />
     <Compile Include="Core.fs" />
     <Compile Include="Loader.fs" />
     <Compile Include="Interpreter.fs" />

@@ -37,7 +37,7 @@ module Interpreter =
     /// Interpreter frontend
     type FrontEnd() =
         
-        do Functions.initializeModules()
+        do Modules.initialize()
 
         // Core reference
         let mutable interpreter: Core.SequenceInterpreter =
@@ -75,20 +75,20 @@ module Interpreter =
 
     /// Get names of all loaded native modules
     let public GetModuleNames() : string list =
-        Functions.initializeModules()
-        Functions.getModuleNames()
+        Modules.initialize()
+        Modules.getModuleNames()
 
     /// Get names of all constants/functions from module with given name
     let public GetModuleContents(name: string) : string list * string list =
-        Functions.initializeModules()
-        Functions.getModuleContents(name)
+        Modules.initialize()
+        Modules.getModuleContents(name)
     
     /// Load script and evaluate data (obsolete)
     let public Evaluate (sequenceStream: Stream)
                         (data: Dictionary<string, Object>) : Results =
 
         // Load extension modules
-        Functions.initializeModules()
+        Modules.initialize()
 
         try
             let interpreter = Core.SequenceInterpreter() in do

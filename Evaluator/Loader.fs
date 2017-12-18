@@ -30,6 +30,7 @@ module internal Loader =
     /// Script file sections
     type private Section =
         | Unknown
+        | NativeReferences
         | SharedVars
         | Data
         | Code
@@ -123,8 +124,8 @@ module internal Loader =
                                   then OpCode.LoadDataArray dataIdx.Value
                                   else
                                     let modName = String.Empty // TEMPORARY
-                                    let value = Functions.resolveConstant modName 
-                                                                          argument in
+                                    let value = Modules.resolveConstant modName 
+                                                                        argument in
                                     OpCode.LoadConst (value)
             | "dup" -> OpCode.Duplicate
             | "unload" when no(argument) -> OpCode.Unload
@@ -153,9 +154,14 @@ module internal Loader =
             // Function call/return
             | "call" -> if argument.Length > 0
                         then
-                            let modName = String.Empty // TEMPORARY
-                            let name = argument
-                            let func = Functions.resolveFunction modName name
+                            let nameParts = argument.Split(':')
+                            let modName = if nameParts.Length = 3
+                                            then nameParts.[0]
+                                            else String.Empty
+                            let name = if nameParts.Length = 3
+                                        then nameParts.[2]
+                                        else argument
+                            let func = Modules.resolveFunction modName name
                             OpCode.Call(FnDisp.Extern func)
                         else failwith "Function name required!"
             | "invoke" -> OpCode.Call(FnDisp.Defined -1)
@@ -225,6 +231,7 @@ module internal Loader =
             let readDirective (line: string) =
                 // Compiler directive
                 match line with
+                | ".ref" -> currentSection := NativeReferences
                 | ".shared" -> currentSection := SharedVars
                 | ".data" -> currentSection := Data
                 | ".defs" -> currentSection := Code
@@ -282,6 +289,8 @@ module internal Loader =
 
                         if isDirective then
                             readDirective line
+                        else if currentSection.Value = NativeReferences then
+                            () // Temporary
                         else if currentSection.Value = Data then
                             // Constant data arrays
                             data.Add(loadConstArray(line))
