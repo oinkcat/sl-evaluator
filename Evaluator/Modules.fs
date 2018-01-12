@@ -18,7 +18,9 @@ module internal Modules =
         let nameOfModule = if String.IsNullOrEmpty(name)
                             then builtinModuleName
                             else name
-        in loadedModules.[nameOfModule]
+        in if loadedModules.ContainsKey(nameOfModule)
+            then loadedModules.[nameOfModule]
+            else failwithf "Unknown module: %s!" nameOfModule
 
     /// Load native modules
     let initialize() =

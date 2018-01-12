@@ -50,10 +50,12 @@ module internal ExtensionTypes =
         member this.GetConstantByName(name: string) : Data =
             if this.AllConstantsInfo.ContainsKey(name)
                 then this.AllConstantsInfo.[name]
-                else failwithf "Invalid constant name: %s!" name
+                else failwithf "Unknown constant name: %s!" name
 
         /// Get function by it's name
         member this.GetFunctionByName(name: string) : FuncType =
-            let funcInfo = List.find (fun t -> (firstOfThree t) = name)
-                                                this.AllFunctionsInfo in
-            secondOfThree funcInfo
+            let funcInfo = List.tryFind (fun t -> (firstOfThree t) = name)
+                                                  this.AllFunctionsInfo 
+            in match funcInfo with
+               | Some info -> secondOfThree info
+               | None -> failwithf "Unknown function name: %s!" name
