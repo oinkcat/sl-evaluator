@@ -16,6 +16,7 @@ module internal DataTypes =
         | DataArray of List<Data>
         | DataHash of Dictionary<string, Data>
         | Iterator of IteratorInfo
+        | FunctionRef of unit
 
     /// Perform iteration on array/hash
     and IteratorInfo(iterable: Data) =

@@ -50,6 +50,7 @@ module internal Core =
         | Reset of int
         | MakeArray of int
         | MakeHash of int
+        | MakeFunctionRef of unit
         | ArrayGet
         | ArraySet
         | ArraySetMath of MathOp

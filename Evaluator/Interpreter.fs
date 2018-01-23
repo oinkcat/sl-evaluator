@@ -68,7 +68,10 @@ module Interpreter =
             interpreter.Shared(name) <- value
 
         /// Set callback function
-        member this.SetCallback() = ()
+        member this.SetCallback (name : string) = ()
+
+        /// Raise custom external event
+        member this.RaiseEvent (name : string) (arg : Object) = ()
 
         /// Run loaded script
         member this.Run() = interpreter.Interpret()
