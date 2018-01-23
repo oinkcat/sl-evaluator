@@ -32,7 +32,8 @@ module internal Core =
     type ComparsionResult = IsLess | IsEqual | IsGreater | Undefined
 
     /// Function type and access information
-    type FunctionDisposition = Extern of FuncType | Defined of int
+    type FunctionKind = 
+        Native of FuncType | Defined of int
 
     /// Instruction opcode
     type OpCode =
@@ -50,7 +51,7 @@ module internal Core =
         | Reset of int
         | MakeArray of int
         | MakeHash of int
-        | MakeFunctionRef of unit
+        | MakeFunctionRef of int
         | ArrayGet
         | ArraySet
         | ArraySetMath of MathOp
@@ -60,26 +61,18 @@ module internal Core =
         | Logic of LogicOp
         | Jump of int
         | CondJump of JumpCondition * int
-        | Call of FunctionDisposition
+        | Call of FunctionKind
         | Invoke
         | Ret
         | Emit
         | EmitNamed of string
 
-    /// Function address and parameters count
-    type FunctionInfo = {
-        Address : int;
-        ParamsCount : int
-    }
-
     /// Instructions sequence
     type Sequence = {
         SharedVarNames : List<string>
         Data : List<Data>
-        Functions : List<FunctionInfo>
-        FrameSizes : Dictionary<int, int>
+        Functions : Dictionary<int, FunctionInfo>
         Instructions : List<OpCode>
-        EntryPoint : int
     }
 
     /// Instruction sequence interpreter
@@ -94,23 +87,11 @@ module internal Core =
         /// Constant data arrays
         let mutable constData : List<Data> = null
 
-        /// Defined functions info
-        let mutable functions : List<FunctionInfo> = null
-
-        /// Frame sizes of each function
-        let mutable functionFrameSizes: Dictionary<int, int> = null
-
-        /// Function return addresses
-        let returnAddresses = new Stack<int>()
-
         /// Data context
         let mutable context: Context = Unchecked.defaultof<Context>
 
-        /// Sequence to interpret (module ?)
-        let mutable programModule: Sequence option = None
-
-        /// Current instruction index
-        let mutable index: int = 0
+        /// Sequence to interpret
+        let mutable program: Sequence option = None
 
         /// Set comparsion result
         let setCmpResult (result : int) :unit =
@@ -279,27 +260,6 @@ module internal Core =
                     // arrayItem[index] = _result
                     setArrayElem()
 
-        /// Create function frame and store return address
-        let jumpAsFunction(address : int) (currentAddress : int) =
-            let numOfVars: int = functionFrameSizes.[address]
-            let childFrame = context.Frame.CreateChildFrame(numOfVars)
-            // Add parameters to function's locals
-            let funcInfo = Seq.find (fun f -> f.Address = address) functions
-            for i = funcInfo.ParamsCount - 1 downto 0 do
-                let paramValue = context.Frame.PopStack() in
-                childFrame.SetRegister i paramValue
-            context.Frame <- childFrame
-            returnAddresses.Push(currentAddress)
-            address
-
-        /// Return result and control to caller
-        let returnCallerFrame() =
-            if context.Frame.HasResult() then
-                let fnResult = context.Frame.PopStack() in
-                context.Frame.Caller.Value.PushStack(fnResult)
-            context.Frame <- context.Frame.Caller.Value
-            returnAddresses.Pop()
-
         /// Get shared variable register index
         /// or fail if no such variable exists
         let getSharedVarIndexCheched (name: string) : int =
@@ -327,13 +287,11 @@ module internal Core =
 
         /// Execute sequence of instruction opcodes
         member this.ExecuteSequence (program : Sequence) =
-            index <- program.EntryPoint
 
             let seqLength = program.Instructions.Count in
 
-            while index < seqLength do
-                let mutable nextIndex = index + 1
-                let instruction = program.Instructions.[index] in
+            while context.Index < seqLength do
+                let instruction = program.Instructions.[context.Index] in
 
                 match instruction with
                 // Data handling
@@ -361,6 +319,7 @@ module internal Core =
                 // Arrays/hashes
                 | MakeArray elemCount -> makeElemsArray elemCount
                 | MakeHash elemCount -> makeElemsHash elemCount
+                | MakeFunctionRef addr -> context.PushToStack(FunctionRef addr)
                 | ArrayGet -> let elem = getArrayElem() in context.PushToStack elem
                 | ArraySet -> setArrayElem()
                 | ArraySetMath op -> setArrayElemWithMath op
@@ -372,15 +331,17 @@ module internal Core =
                 | Logic op -> performLogic op
 
                 // Flow control
-                | Jump newIndex -> nextIndex <- newIndex
+                | Jump newIndex -> context.Jump(newIndex)
                 | CondJump (jumpType, newIndex) -> if checkCanJump jumpType
-                                                    then nextIndex <- newIndex
+                                                    then context.Jump(newIndex)
                 | Call disp -> 
                     match disp with
-                    | Extern func -> func context
-                    | Defined fnIndex -> nextIndex <- (jumpAsFunction fnIndex nextIndex)
-                | Invoke -> () // TODO: Dynamic invoke
-                | Ret -> nextIndex <- returnCallerFrame()
+                    | Native func -> func context
+                    | Defined addr -> context.JumpAsFunction addr
+                | Invoke ->
+                    let addr = context.PopAddrStack() in 
+                    context.JumpAsFunction addr
+                | Ret -> context.ReturnCallerFrame()
 
                 // Data output
                 | Emit -> context.TextOutput.Add(context.PopAsResult())
@@ -388,7 +349,7 @@ module internal Core =
                     let value: Object = context.PopAsNativeObject() in
                     context.NamedResults.Add(key, value)
 
-                index <- nextIndex
+                context.AdvanceIndex()
 
         /// Set input data
         member this.SetData (data: Dictionary<string, Object>) : unit =
@@ -399,25 +360,23 @@ module internal Core =
                 data.Keys
 
         /// Set instructions sequence to interpret
-        member this.SetSequence (program : Sequence) : unit =
-            programModule <- Some(program)
-            sharedVarNames <- program.SharedVarNames
-            constData <- program.Data
-            functions <- program.Functions
-            functionFrameSizes <- program.FrameSizes
-            context <- Context(DataFrame(None, functionFrameSizes.[-1]))
+        member this.SetSequence (script : Sequence) : unit =
+            program <- Some(script)
+            sharedVarNames <- script.SharedVarNames
+            constData <- script.Data
+            context <- Context(script.Functions)
 
         /// Execute instructions sequence
         member this.Interpret() : unit =
-            match programModule with
+            match program with
             | Some(program) ->
                 try
                     this.ExecuteSequence program
                 with e ->
                     // Runtime exceptions handling
                     let errorInfo: Errors.RuntimeErrorInfo = {
-                        Index = index
-                        OpCodeName = program.Instructions.[index].ToString()
+                        Index = context.Index
+                        OpCodeName = program.Instructions.[context.Index].ToString()
                         Error = e
                         Dump = this.Dump()
                         } in raise (new Errors.ExecutionException(errorInfo))

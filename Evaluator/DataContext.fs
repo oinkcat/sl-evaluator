@@ -8,6 +8,13 @@ open DataTypes
 /// All data context structures
 module internal DataContext =
 
+    /// Function address and parameters count
+    type internal FunctionInfo = {
+        Address : int
+        ParamsCount : int
+        FrameSize : int
+    }
+
     /// Global/function scope data frame
     type DataFrame(parent : DataFrame option, size: int) =
 
@@ -69,10 +76,22 @@ module internal DataContext =
             buffer.ToString()
 
     /// Data context
-    type Context(globalFrame: DataFrame) =
+    type Context(allFunctions : Dictionary<int, FunctionInfo>) =
+
+        /// Defined functions info
+        let mutable functions : Dictionary<int, FunctionInfo> = allFunctions
+
+        /// Function return addresses
+        let returnAddresses = new Stack<int>()
+
+        /// Current instruction index
+        let mutable index: int = functions.[-1].Address
+
+        /// Already performed change of instruction pointer
+        let mutable jumped : bool = false
 
         /// Current frame
-        let mutable frame: DataFrame = globalFrame
+        let mutable frame: DataFrame = DataFrame(None, functions.[-1].FrameSize)
 
         /// Input data
         let input = new Dictionary<string, Data>()
@@ -86,6 +105,9 @@ module internal DataContext =
         member this.Frame with get() = frame and 
                                set(newFrame: DataFrame) = frame <- newFrame
 
+        /// Current instruction index
+        member this.Index = index
+
         /// Input data (obsolete)
         member this.Input = input
 
@@ -94,6 +116,17 @@ module internal DataContext =
 
         /// Output data
         member this.NamedResults = namedResults
+
+        /// Increment instruction pointer
+        member this.AdvanceIndex() =
+            if not jumped
+                then index <- index + 1
+                else jumped <- false
+
+        /// Set instruction pointer to address
+        member this.Jump(address : int) =
+            index <- address
+            jumped <- true
 
         /// Put value to stack
         member this.PushToStack (data: Data) = frame.PushStack(data)
@@ -125,6 +158,12 @@ module internal DataContext =
             | DataArray(list) -> list
             | _ -> failwith "Expected: Array!"
 
+        /// Pop function address from stack
+        member this.PopAddrStack() : int =
+            match this.PopFromStack() with
+            | FunctionRef(addr) -> addr
+            | _ -> failwith "Expected: Function!"
+
         /// Convert data value to string
         member this.DataToString (data: Data) =
             match data with
@@ -143,6 +182,7 @@ module internal DataContext =
                                     hash in
                 String.Concat('[', String.Join(";", elemStrings), ']')
             | Iterator info -> String.Concat("<Forward iterator>")
+            | FunctionRef addr -> String.Concat("<Function at: ", addr, ">")
 
         /// Pop value from stack and convert to string
         member this.PopAsResult() = this.DataToString(this.PopFromStack())
@@ -158,6 +198,7 @@ module internal DataContext =
             | DataArray(arr) -> arr.Count > 0
             | DataHash(hash) -> hash.Count > 0
             | Iterator info -> info.HasNext
+            | FunctionRef _ -> true
 
         /// Pop value as plain .NET object
         member this.PopAsNativeObject() : Object =
@@ -168,6 +209,27 @@ module internal DataContext =
             let data = this.PopFromStack() in do
             this.PushToStack data
             this.PushToStack data
+
+        /// Create function frame and store return address
+        member this.JumpAsFunction(address : int) =
+            let funcInfo = functions.[address]
+            let numOfVars: int = funcInfo.FrameSize
+            let childFrame = frame.CreateChildFrame(numOfVars)
+            // Add parameters to function's locals
+            for i = funcInfo.ParamsCount - 1 downto 0 do
+                let paramValue = frame.PopStack() in
+                childFrame.SetRegister i paramValue
+            frame <- childFrame
+            returnAddresses.Push(index + 1)
+            this.Jump(address)
+
+        /// Return result and control to caller
+        member this.ReturnCallerFrame() =
+            if frame.HasResult() then
+                let fnResult = frame.PopStack() in
+                frame.Caller.Value.PushStack(fnResult)
+            frame <- frame.Caller.Value
+            this.Jump(returnAddresses.Pop())
 
         /// Dump frame contents
         member this.DumpFrame() = frame.Dump(this.DataToString)

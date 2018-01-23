@@ -3,7 +3,7 @@
 open System
 open System.Collections.Generic
 
-/// Convert data to >NET object and vice versa
+/// Data types and conversions
 module internal DataTypes =
 
     /// Data value container
@@ -16,7 +16,7 @@ module internal DataTypes =
         | DataArray of List<Data>
         | DataHash of Dictionary<string, Data>
         | Iterator of IteratorInfo
-        | FunctionRef of unit
+        | FunctionRef of int
 
     /// Perform iteration on array/hash
     and IteratorInfo(iterable: Data) =
@@ -64,6 +64,7 @@ module internal DataTypes =
                                     (kv.Key, dataToNative(kv.Value))) hash
             in Map.ofSeq pairs :> Object
         | Iterator(info) -> upcast(info) // Unchanged
+        | FunctionRef(addr) -> addr :> Object
 
     // Convert .NET object to Data
     let rec nativeToData (value: Object) : Data =

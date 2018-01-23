@@ -107,6 +107,7 @@ module internal BuiltinFunctions =
                             | DataHash _ -> "hash"
                             | Iterator _ -> "iterator"
                             | Empty -> "null"
+                            | FunctionRef _ -> "function"
                             in ctx.PushToStack(Text typeName)
 
         let fn_iter_create (ctx: Context) =

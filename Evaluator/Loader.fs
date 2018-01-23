@@ -15,8 +15,8 @@ module internal Loader =
     type CmpBin = Core.CmpOp
     type BoolBin = Core.LogicOp
     type Cond = Core.JumpCondition
-    type FnDisp = Core.FunctionDisposition
-    type FnInfo = Core.FunctionInfo
+    type FnDisp = Core.FunctionKind
+    type FnInfo = DataContext.FunctionInfo
     type Sequence = Core.Sequence
     type Data = DataTypes.Data
 
@@ -135,6 +135,7 @@ module internal Loader =
             // Arrays/hashes
             | "mk_array" -> OpCode.MakeArray(argument |> asNumber)
             | "mk_hash" -> OpCode.MakeHash(argument |> asNumber)
+            | "mk_ref.udf" -> OpCode.MakeFunctionRef -1
             | "get" -> OpCode.ArrayGet
             | "set" -> OpCode.ArraySet
             | "set.op" when isMathOp(argument) ->
@@ -152,19 +153,20 @@ module internal Loader =
                         then OpCode.Emit
                         else OpCode.EmitNamed(argument |> asText)
             // Function call/return
-            | "call" -> if argument.Length > 0
-                        then
-                            let nameParts = argument.Split(':')
-                            let modName = if nameParts.Length = 3
-                                            then nameParts.[0]
-                                            else String.Empty
-                            let name = if nameParts.Length = 3
-                                        then nameParts.[2]
-                                        else argument
-                            let func = Modules.resolveFunction modName name
-                            OpCode.Call(FnDisp.Extern func)
-                        else failwith "Function name required!"
-            | "invoke" -> OpCode.Call(FnDisp.Defined -1)
+            | "call.native" ->if argument.Length > 0
+                                then
+                                    let nameParts = argument.Split(':')
+                                    let modName = if nameParts.Length = 3
+                                                    then nameParts.[0]
+                                                    else String.Empty
+                                    let name = if nameParts.Length = 3
+                                                then nameParts.[2]
+                                                else argument
+                                    let func = Modules.resolveFunction modName name
+                                    OpCode.Call(FnDisp.Native func)
+                                else failwith "Function name required!"
+            | "call.udf" -> OpCode.Call(FnDisp.Defined -1)
+            | "invoke" -> OpCode.Invoke
             | "ret" -> OpCode.Ret
             | _ -> failwithf "Invalid instruction: %s!" opName
         in match opCode with
@@ -175,6 +177,7 @@ module internal Loader =
                 match disp with
                 | FnDisp.Defined _ -> (callOpCode, Some(argument))
                 | _ -> (callOpCode, None)
+            | OpCode.MakeFunctionRef _ as refOpCode -> (refOpCode, Some(argument))
             | nonJumpOpCode -> (nonJumpOpCode, None)
 
     /// Is line is a comment
@@ -208,8 +211,13 @@ module internal Loader =
         let sharedVariables = new List<string>()
         let data = new List<Data>()
         let sequence = new List<OpCode>()
-        let functions = new List<FnInfo>()
-        let entryInstructionIndex = ref 0
+
+        let functions = new Dictionary<int, FnInfo>()
+        functions.Add(-1, {
+            Address = Int32.MaxValue
+            ParamsCount = 0
+            FrameSize = 0
+        })
 
         // Determine functions frame size
         let funcAddress: int ref = ref -1
@@ -225,7 +233,7 @@ module internal Loader =
 
         /// Read next instruction line
         let rec readNext (reader: StreamReader) (index: int) (lineNo: int) =
-            let mutable isInstruction = false
+            let isInstruction : bool ref = ref false
 
             // Read directive line
             let readDirective (line: string) =
@@ -238,13 +246,14 @@ module internal Loader =
                 | ".entry" ->
                     currentSection := Code
                     funcAddress := -1
-                    entryInstructionIndex := index
+                    let mainCodeInfo = functions.[-1]
+                    functions.[-1] <- { mainCodeInfo with Address = index }
                 | _ -> failwithf "Unknown script file section: %s!" line
 
             // Read regular instruction
             let readInstruction (line: string) =
                 // Regular instruction
-                isInstruction <- true
+                isInstruction.Value <- true
                 let (opCode, label) = translate line
                 if label.IsSome then
                     labelRefs.Add(index, label.Value)
@@ -266,10 +275,11 @@ module internal Loader =
                 if dotPos > -1 then do
                     let nArgs = int(labelName.Substring(dotPos + 1))
                     let fnDefInfo : FnInfo = {
-                        Address = index;
+                        Address = index
                         ParamsCount = nArgs
+                        FrameSize = -1
                     }
-                    functions.Add(fnDefInfo)
+                    functions.Add(index, fnDefInfo)
                     let fnName = labelName.Substring(0, dotPos)
                     labelTargets.Add(fnName, index)
                     // Initial frame size
@@ -306,7 +316,7 @@ module internal Loader =
                 // Loading exception handling
                 with e -> raise (new Errors.LoadException(lineNo, e.Message))
 
-                let nextIndex = if isInstruction then index + 1 else index
+                let nextIndex = if isInstruction.Value then index + 1 else index
                 let nextLineNo = lineNo + 1 in
                 readNext reader nextIndex nextLineNo
 
@@ -323,15 +333,20 @@ module internal Loader =
                 | OpCode.Jump _ -> OpCode.Jump target
                 | OpCode.CondJump (cond, _) -> OpCode.CondJump (cond, target)
                 | OpCode.Call _ -> OpCode.Call(FnDisp.Defined target)
+                | OpCode.MakeFunctionRef _ -> OpCode.MakeFunctionRef target
                 | other -> other (* This never happens *) )
+
+        // Update functions frame size
+        Seq.iter (fun (kv : KeyValuePair<int, int>) ->
+                    let origFnInfo = functions.[kv.Key]
+                    functions.[kv.Key] <- { origFnInfo with FrameSize = kv.Value })
+                    frameSizes
 
         // Return all information about program
         {
             SharedVarNames = sharedVariables
             Data = data
             Functions = functions
-            FrameSizes = frameSizes
             Instructions = sequence
-            EntryPoint = entryInstructionIndex.Value
         }
  
