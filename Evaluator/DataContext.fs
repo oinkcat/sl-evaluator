@@ -78,6 +78,12 @@ module internal DataContext =
     /// Data context
     type Context(allFunctions : Dictionary<int, FunctionInfo>) =
 
+        // Execution state changed
+        let stateChanged: Event<bool> = Event<bool>()
+
+        // External event occured
+        let externalEvent: Event<string * Data> = Event<string * Data>()
+
         /// Defined functions info
         let mutable functions : Dictionary<int, FunctionInfo> = allFunctions
 
@@ -87,11 +93,17 @@ module internal DataContext =
         /// Current instruction index
         let mutable index: int = functions.[-1].Address
 
+        /// Script is running
+        let mutable running: bool = true
+
         /// Already performed change of instruction pointer
         let mutable jumped : bool = false
 
         /// Current frame
         let mutable frame: DataFrame = DataFrame(None, functions.[-1].FrameSize)
+
+        /// Event handler frame
+        let mutable handlerFrame: DataFrame = Unchecked.defaultof<DataFrame>
 
         /// Input data
         let input = new Dictionary<string, Data>()
@@ -101,7 +113,11 @@ module internal DataContext =
 
         /// Named results
         let namedResults = new Dictionary<string, Object>()
+        
+        /// Execution in progress
+        member this.Running = running
 
+        /// Current function frame
         member this.Frame with get() = frame and 
                                set(newFrame: DataFrame) = frame <- newFrame
 
@@ -122,11 +138,6 @@ module internal DataContext =
             if not jumped
                 then index <- index + 1
                 else jumped <- false
-
-        /// Set instruction pointer to address
-        member this.Jump(address : int) =
-            index <- address
-            jumped <- true
 
         /// Put value to stack
         member this.PushToStack (data: Data) = frame.PushStack(data)
@@ -210,6 +221,11 @@ module internal DataContext =
             this.PushToStack data
             this.PushToStack data
 
+        /// Set instruction pointer to address
+        member this.Jump(address : int) =
+            index <- address
+            jumped <- true
+
         /// Create function frame and store return address
         member this.JumpAsFunction(address : int) =
             let funcInfo = functions.[address]
@@ -223,13 +239,44 @@ module internal DataContext =
             returnAddresses.Push(index + 1)
             this.Jump(address)
 
+        /// Go to event handler routine
+        member this.JumpAsEventHandler (address : int) (isTerminal : bool) =
+            // Don't advance instruction pointer
+            index <- index - 1
+            this.JumpAsFunction address
+            // Store handler frame for return to dispatcher
+            if not isTerminal then handlerFrame <- frame
+
         /// Return result and control to caller
         member this.ReturnCallerFrame() =
             if frame.HasResult() then
                 let fnResult = frame.PopStack() in
                 frame.Caller.Value.PushStack(fnResult)
+
+            if frame = handlerFrame then this.Suspend()
             frame <- frame.Caller.Value
             this.Jump(returnAddresses.Pop())
+
+        /// Execution state changed event
+        member this.ExecutionStateChanged = stateChanged.Publish
+
+        /// External event occurence
+        member this.ExternalEvent = externalEvent.Publish
+
+        /// Suspend execution
+        member this.Suspend() = 
+            running <- false
+            stateChanged.Trigger false
+
+        /// Resume execution
+        member this.Resume() =
+            running <- true
+            jumped <- false
+            stateChanged.Trigger true
+
+        /// External event is occured
+        member this.ExternalEventOccured (name : string) (param : Data) =
+            externalEvent.Trigger(name, param)
 
         /// Dump frame contents
         member this.DumpFrame() = frame.Dump(this.DataToString)

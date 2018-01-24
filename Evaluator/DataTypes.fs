@@ -85,4 +85,12 @@ module internal DataTypes =
                                     nativeToData (nativeArray.GetValue(idx)))
                                     (seq { 0 .. (nativeArray.Length - 1) })
             DataArray(new List<Data>(mapped))
+        // Hash
+        | hash when (hash :? Dictionary<string, Object>) ->
+            let srcDict = hash :?> Dictionary<string, Object>
+            let dstDict = new Dictionary<string, Data>() in
+            Seq.iter (fun (kv: KeyValuePair<string, Object>) -> 
+                        dstDict.Add(kv.Key, nativeToData kv.Value)) 
+                     srcDict
+            DataHash dstDict
         | _ -> failwith "Incorrect input data type!"

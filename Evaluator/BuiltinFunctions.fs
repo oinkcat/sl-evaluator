@@ -9,12 +9,14 @@ open ExtensionTypes
 /// Predefined modules
 module internal BuiltinFunctions =
 
-    /// Name of default module
-    let builtinModuleName = "$builtin"
+    /// Defined modules
+    let definedModules: string array = [|
+        "$builtin"; "math"; "events"
+    |]
 
     /// Default module
     type BuiltinModule() =
-        inherit NativeModule(builtinModuleName)
+        inherit NativeModule(definedModules.[0])
 
         let fn__data_ (ctx: Context) =
             let dataKey = ctx.PopStringFromStack() in
@@ -179,12 +181,9 @@ module internal BuiltinFunctions =
             // Other
             ("Format", fn_format, 2)]
 
-    /// Name of default module
-    let mathModuleName = "math"
-
     /// Math functions
     type MathModule() =
-        inherit NativeModule(mathModuleName)
+        inherit NativeModule(definedModules.[1])
 
         /// Random value generator
         let random: Random = new Random()
@@ -243,8 +242,8 @@ module internal BuiltinFunctions =
         /// All constants
         override this.AllConstantsInfo =
             Map.ofList [
-                ("pi", Number(Math.PI))
-                ("e", Number(Math.E))
+                ("PI", Number(Math.PI))
+                ("E", Number(Math.E))
             ]
 
         /// All functions
@@ -259,3 +258,76 @@ module internal BuiltinFunctions =
             ("Tan", fn_tan, 1)
             ("Rand", fn_rand, 1)
             ("Round", fn_round, 2)]
+
+    /// Attached event handlers
+    type private EventHanlers = Dictionary<string, int>
+
+    /// Event handling
+    type EventsModule() =
+        inherit NativeModule(definedModules.[2])
+
+        // Exit loop event name
+        let exitEventName = "exit"
+
+        // Event handlers for contexts
+        let contextEventHandlers = new Dictionary<Context, EventHanlers>()
+
+        // Contexts with event dispatchers set
+        let eventedContexts = new HashSet<Context>()
+
+        // Get event handlers mapping for context
+        let getEventHandlers (ctx: Context) : EventHanlers =
+            if not(contextEventHandlers.ContainsKey(ctx))
+                then contextEventHandlers.Add(ctx, new EventHanlers())
+            
+            contextEventHandlers.[ctx]
+
+        // Set event handler
+        let fn_set_handler (ctx: Context) =
+            let handlersMapping = getEventHandlers ctx
+            let handlerAddress = ctx.PopAddrStack()
+            let eventName = ctx.PopStringFromStack() in
+            if handlersMapping.ContainsKey(eventName)
+                then handlersMapping.[eventName] = handlerAddress |> ignore
+                else handlersMapping.Add(eventName, handlerAddress) |> ignore
+
+        // Suspend execution and wait for events
+        let fn_start_loop (ctx: Context) =
+            // Dispatch events to handlers
+            let eventsDispatcher (data: string * Data) =
+                let eventName = fst data
+                let isExitEvent = eventName = exitEventName
+                let allHandlers = getEventHandlers ctx in
+
+                if allHandlers.ContainsKey(fst data) then
+                    // Jump to handler address
+                    let handlerAddress = allHandlers.[eventName] in
+                    ctx.PushToStack (snd data)
+                    ctx.JumpAsEventHandler handlerAddress isExitEvent
+                    ctx.Resume()
+                else if isExitEvent then
+                    // Continue standard control flow
+                    ctx.Resume()
+            
+            // Attach event dispatcher to context
+            if not(eventedContexts.Contains(ctx))
+                then
+                    ctx.ExternalEvent.Add eventsDispatcher
+                    eventedContexts.Add ctx |> ignore
+            ctx.Suspend()
+
+        // Stop waiting for events and resume main execution flow
+        let fn_exit_loop (ctx: Context) = ()
+
+        /// All constants
+        override this.AllConstantsInfo =
+            Map.ofList [
+                ("Start", Text "start")
+                ("End", Text exitEventName)
+            ]
+
+        /// All functions
+        override this.AllFunctionsInfo = [
+            ("SetHandler", fn_set_handler, 2)
+            ("StartLoop", fn_start_loop, 0)
+            ("ExitLoop", fn_exit_loop, 0)]

@@ -34,14 +34,26 @@ module Interpreter =
         Named: Dictionary<string, Object>
     }
 
+    /// Instructions execution state
+    type ExecutionState =
+        | NotRunning = 0
+        | Running = 1
+        | Paused = 2
+        | Finished = 3
+
     /// Interpreter frontend
     type FrontEnd() =
         
         do Modules.initialize()
 
+        let mutable state: ExecutionState = ExecutionState.NotRunning
+
         // Core reference
         let mutable interpreter: Core.SequenceInterpreter =
             Unchecked.defaultof<Core.SequenceInterpreter>
+
+        /// Processing state
+        member this.State = state
 
         /// Script text output
         member this.TextOutput = interpreter.TextResults
@@ -51,7 +63,12 @@ module Interpreter =
 
         /// Load script instructions
         member this.LoadScript(instructionsStream : Stream) : unit =
+            // Interpreter core and events
             interpreter <- Core.SequenceInterpreter()
+            interpreter.Resumed.Add (fun _ -> state <- ExecutionState.Running)
+            interpreter.Suspended.Add (fun _ -> state <- ExecutionState.Paused)
+            interpreter.Ended.Add (fun _ -> state <- ExecutionState.Finished)
+
             let scriptContent = Loader.Load(instructionsStream) in
                 interpreter.SetSequence(scriptContent)
 
@@ -71,10 +88,14 @@ module Interpreter =
         member this.SetCallback (name : string) = ()
 
         /// Raise custom external event
-        member this.RaiseEvent (name : string) (arg : Object) = ()
+        member this.RaiseEvent (name : string) (arg : Object) =
+            interpreter.RaiseEvent name arg
 
         /// Run loaded script
-        member this.Run() = interpreter.Interpret()
+        member this.Run() = 
+            if state <> ExecutionState.Finished then
+                state <- ExecutionState.Running
+                interpreter.Run()
 
     /// Get names of all loaded native modules
     let public GetModuleNames() : string list =
@@ -97,7 +118,7 @@ module Interpreter =
             let interpreter = Core.SequenceInterpreter() in do
                 interpreter.SetSequence(Loader.Load(sequenceStream))
                 interpreter.SetData data
-                interpreter.Interpret()
+                interpreter.Run()
             { 
                 Text = interpreter.TextResults
                 Named = interpreter.NamedResults

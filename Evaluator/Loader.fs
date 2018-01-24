@@ -98,6 +98,17 @@ module internal Loader =
                                       ("jmple", Cond.IfLessOrEqual)
                                       ("jmpge", Cond.IfGreatOrEqual)])
 
+    /// Split object qualified name
+    let private splitQualifiedName (name: string) =
+        let nameParts = name.Split(':')
+        let modName = if nameParts.Length = 3
+                        then nameParts.[0]
+                        else String.Empty
+        let objName = if nameParts.Length = 3
+                        then nameParts.[2]
+                        else name in
+        (modName, objName)
+
     /// Translate one command into opcode
     let private translate (line: string) : OpCode * string option =
 
@@ -123,9 +134,11 @@ module internal Loader =
                               if Int32.TryParse(argument, dataIdx)
                                   then OpCode.LoadDataArray dataIdx.Value
                                   else
-                                    let modName = String.Empty // TEMPORARY
+                                    let names = splitQualifiedName argument
+                                    let modName = fst names
+                                    let name = snd names
                                     let value = Modules.resolveConstant modName 
-                                                                        argument in
+                                                                        name in
                                     OpCode.LoadConst (value)
             | "dup" -> OpCode.Duplicate
             | "unload" when no(argument) -> OpCode.Unload
@@ -155,13 +168,9 @@ module internal Loader =
             // Function call/return
             | "call.native" ->if argument.Length > 0
                                 then
-                                    let nameParts = argument.Split(':')
-                                    let modName = if nameParts.Length = 3
-                                                    then nameParts.[0]
-                                                    else String.Empty
-                                    let name = if nameParts.Length = 3
-                                                then nameParts.[2]
-                                                else argument
+                                    let names = splitQualifiedName argument
+                                    let modName = fst names
+                                    let name = snd names
                                     let func = Modules.resolveFunction modName name
                                     OpCode.Call(FnDisp.Native func)
                                 else failwith "Function name required!"
@@ -239,7 +248,7 @@ module internal Loader =
             let readDirective (line: string) =
                 // Compiler directive
                 match line with
-                | ".ref" -> currentSection := NativeReferences
+                | ".refs" -> currentSection := NativeReferences
                 | ".shared" -> currentSection := SharedVars
                 | ".data" -> currentSection := Data
                 | ".defs" -> currentSection := Code

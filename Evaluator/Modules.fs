@@ -3,7 +3,6 @@
 open System
 open System.Collections.Generic
 open DataTypes
-open DataContext
 open ExtensionTypes
 open BuiltinFunctions
 
@@ -16,7 +15,7 @@ module internal Modules =
     /// Get native module by it's name
     let private getModuleByName (name: string) : NativeModule =
         let nameOfModule = if String.IsNullOrEmpty(name)
-                            then builtinModuleName
+                            then definedModules.[0]
                             else name
         in if loadedModules.ContainsKey(nameOfModule)
             then loadedModules.[nameOfModule]
@@ -29,8 +28,9 @@ module internal Modules =
             if not(loadedModules.ContainsKey(name)) then
                 loadedModules.Add(name, loadedModule)
 
-        addModule builtinModuleName (new BuiltinModule())
-        addModule mathModuleName (new MathModule())
+        addModule definedModules.[0] (new BuiltinModule())
+        addModule definedModules.[1] (new MathModule())
+        addModule definedModules.[2] (new EventsModule())
 
     /// Get constant value by it's name
     let resolveConstant (moduleName: string) (name: string) : Data =

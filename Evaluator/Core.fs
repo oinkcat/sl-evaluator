@@ -93,6 +93,11 @@ module internal Core =
         /// Sequence to interpret
         let mutable program: Sequence option = None
 
+        // State change events
+        let suspended: Event<unit> = Event<unit>()
+        let resumed: Event<unit> = Event<unit>()
+        let ended: Event<unit> = Event<unit>()
+
         /// Set comparsion result
         let setCmpResult (result : int) :unit =
             cmpResult <- match result with
@@ -270,6 +275,15 @@ module internal Core =
 
         (* ******************** Instance members ******************** *)
 
+        /// Execution was suspended
+        member this.Suspended = suspended.Publish
+
+        /// Execution resumed
+        member this.Resumed = resumed.Publish
+
+        /// Execution finished
+        member this.Ended = ended.Publish
+
         /// Shared variables
         member this.Shared
             with get (name: string) : Object =
@@ -290,7 +304,7 @@ module internal Core =
 
             let seqLength = program.Instructions.Count in
 
-            while context.Index < seqLength do
+            while (context.Index < seqLength) && context.Running do
                 let instruction = program.Instructions.[context.Index] in
 
                 match instruction with
@@ -350,6 +364,11 @@ module internal Core =
                     context.NamedResults.Add(key, value)
 
                 context.AdvanceIndex()
+            
+            // Interrupt reason
+            if context.Index < seqLength
+                then suspended.Trigger()
+                else ended.Trigger()
 
         /// Set input data
         member this.SetData (data: Dictionary<string, Object>) : unit =
@@ -365,9 +384,24 @@ module internal Core =
             sharedVarNames <- script.SharedVarNames
             constData <- script.Data
             context <- Context(script.Functions)
+            
+            // Suspend state change event handler
+            let stateChanged (active: bool) =
+                if active
+                    then
+                        resumed.Trigger()
+                        // Continue execution
+                        this.Run()
+                    else suspended.Trigger()
+            context.ExecutionStateChanged.Add stateChanged
+
+        /// Raise external event
+        member this.RaiseEvent (name : string) (param : Object) =
+            let dataParam = nativeToData param in
+            context.ExternalEventOccured name dataParam
 
         /// Execute instructions sequence
-        member this.Interpret() : unit =
+        member this.Run() : unit =
             match program with
             | Some(program) ->
                 try
