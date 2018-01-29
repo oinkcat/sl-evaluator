@@ -176,7 +176,7 @@ module internal Core =
                 match operation with
                 | Equal -> cmpResult = IsEqual
                 | NotEqual -> cmpResult <> IsEqual
-                | Less -> cmpResult = IsEqual
+                | Less -> cmpResult = IsLess
                 | Greater -> cmpResult = IsGreater
                 | LessOrEqual -> cmpResult = IsLess || cmpResult = IsEqual
                 | GreaterOrEqual -> cmpResult = IsGreater || cmpResult = IsEqual
