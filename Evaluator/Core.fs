@@ -366,9 +366,9 @@ module internal Core =
                 context.AdvanceIndex()
             
             // Interrupt reason
-            if context.Index < seqLength
-                then suspended.Trigger()
-                else ended.Trigger()
+            if context.Running
+                then ended.Trigger()
+                else suspended.Trigger()
 
         /// Set input data
         member this.SetData (data: Dictionary<string, Object>) : unit =
@@ -396,9 +396,13 @@ module internal Core =
             context.ExecutionStateChanged.Add stateChanged
 
         /// Raise external event
-        member this.RaiseEvent (name : string) (param : Object) =
+        member this.RaiseEvent (name : string) (param : Object) : Object =
             let dataParam = nativeToData param in
             context.ExternalEventOccured name dataParam
+            // Return result to caller
+            if context.HasDataOnStack
+                then context.PopAsNativeObject()
+                else null
 
         /// Execute instructions sequence
         member this.Run() : unit =

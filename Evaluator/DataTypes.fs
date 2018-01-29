@@ -59,10 +59,11 @@ module internal DataTypes =
         | Boolean(bln) -> bln :> Object
         | Date(date) -> date :> Object
         | DataArray(arr) -> Array.ofSeq(Seq.map dataToNative arr) :> Object
-        | DataHash(hash) -> 
-            let pairs = Seq.map (fun (kv: KeyValuePair<string, Data>) ->
-                                    (kv.Key, dataToNative(kv.Value))) hash
-            in Map.ofSeq pairs :> Object
+        | DataHash(hash) ->
+            let nativeDict = new Dictionary<string, Object>() in
+            Seq.iter (fun (kv: KeyValuePair<string, Data>) ->
+                        nativeDict.Add(kv.Key, dataToNative(kv.Value))) hash
+            nativeDict :> Object
         | Iterator(info) -> upcast(info) // Unchanged
         | FunctionRef(addr) -> addr :> Object
 

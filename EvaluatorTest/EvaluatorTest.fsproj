@@ -22,7 +22,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
     <DocumentationFile>bin\Debug\EvaluatorTest.XML</DocumentationFile>
-    <StartArguments>"E:\WSL Shared\compiler_service\tests\event.lb"</StartArguments>
+    <StartArguments>"C:\Users\softc\Documents\Visual Studio 2015\Projects\CustomForms\CustomFormsTest\Storage\Instructions\pages\main.lb"</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>

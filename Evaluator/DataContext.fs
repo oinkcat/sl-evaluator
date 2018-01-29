@@ -59,7 +59,7 @@ module internal DataContext =
                 else failwith "Stack is empty!"
 
         /// Is there a result of function?
-        member this.HasResult() = stack.Count > 0
+        member this.HasResult with get() = stack.Count > 0
 
         /// Dump contents of frame and all parent frames
         member this.Dump(dumpFunc: Data -> string) : string =
@@ -113,6 +113,26 @@ module internal DataContext =
 
         /// Named results
         let namedResults = new Dictionary<string, Object>()
+
+        /// Convert data value to string
+        let rec dataToString (data: Data) =
+            match data with
+            | Number(num) -> num.ToString()
+            | Text(str) -> str
+            | Boolean(bln) -> bln.ToString()
+            | Date(date) -> date.ToString()
+            | Empty -> "null"
+            | DataArray(arr) ->
+                let elemStrings = Seq.map dataToString arr in
+                String.Concat('[', String.Join(";", elemStrings), ']')
+            | DataHash(hash) ->
+                let elemStrings = Seq.map (fun (kv: KeyValuePair<string, Data>) ->
+                                    let repr = dataToString(kv.Value)
+                                    String.Concat(kv.Key, ':', repr))
+                                    hash in
+                String.Concat('[', String.Join(";", elemStrings), ']')
+            | Iterator info -> String.Concat("<Forward iterator>")
+            | FunctionRef addr -> String.Concat("<Function at: ", addr, ">")
         
         /// Execution in progress
         member this.Running = running
@@ -138,6 +158,9 @@ module internal DataContext =
             if not jumped
                 then index <- index + 1
                 else jumped <- false
+
+        /// Is there a data on top of the stack
+        member this.HasDataOnStack = frame.HasResult
 
         /// Put value to stack
         member this.PushToStack (data: Data) = frame.PushStack(data)
@@ -175,28 +198,8 @@ module internal DataContext =
             | FunctionRef(addr) -> addr
             | _ -> failwith "Expected: Function!"
 
-        /// Convert data value to string
-        member this.DataToString (data: Data) =
-            match data with
-            | Number(num) -> num.ToString()
-            | Text(str) -> str
-            | Boolean(bln) -> bln.ToString()
-            | Date(date) -> date.ToString()
-            | Empty -> "null"
-            | DataArray(arr) ->
-                let elemStrings = Seq.map this.DataToString arr in
-                String.Concat('[', String.Join(";", elemStrings), ']')
-            | DataHash(hash) ->
-                let elemStrings = Seq.map (fun (kv: KeyValuePair<string, Data>) ->
-                                    let repr = this.DataToString(kv.Value)
-                                    String.Concat(kv.Key, ':', repr))
-                                    hash in
-                String.Concat('[', String.Join(";", elemStrings), ']')
-            | Iterator info -> String.Concat("<Forward iterator>")
-            | FunctionRef addr -> String.Concat("<Function at: ", addr, ">")
-
         /// Pop value from stack and convert to string
-        member this.PopAsResult() = this.DataToString(this.PopFromStack())
+        member this.PopAsResult() = dataToString(this.PopFromStack())
 
         /// Pop value from stack and coerce to boolean type
         member this.PopAsBoolean() : bool =
@@ -249,7 +252,7 @@ module internal DataContext =
 
         /// Return result and control to caller
         member this.ReturnCallerFrame() =
-            if frame.HasResult() then
+            if frame.HasResult then
                 let fnResult = frame.PopStack() in
                 frame.Caller.Value.PushStack(fnResult)
 
@@ -279,4 +282,4 @@ module internal DataContext =
             externalEvent.Trigger(name, param)
 
         /// Dump frame contents
-        member this.DumpFrame() = frame.Dump(this.DataToString)
+        member this.DumpFrame() = frame.Dump(dataToString)
