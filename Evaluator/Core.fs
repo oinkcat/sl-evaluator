@@ -52,6 +52,7 @@ module internal Core =
         | MakeArray of int
         | MakeHash of int
         | MakeFunctionRef of int
+        | BindInner
         | ArrayGet
         | ArraySet
         | ArraySetMath of MathOp
@@ -104,33 +105,54 @@ module internal Core =
                          | -1 -> IsLess
                          | 0 -> IsEqual
                          | 1 -> IsGreater
-                         | _ -> failwith "Impossible!"
+                         | _ -> Undefined
 
         /// Compare two data items
         let compareDataItems (item1: Data) (item2: Data) : unit =
+            let undef = Int32.MinValue
+
             // TODO: other comparsions
             let result: int =
                 match item1 with
                 | Number(num1) ->
                     match item2 with
                     | Number(num2) -> num1.CompareTo(num2)
+                    | Empty -> undef
                     | _ -> 0
                 | Text(txt1) ->
                     match item2 with
                     | Text(txt2) -> txt1.CompareTo(txt2)
+                    | Empty -> undef
                     | _ -> 0
                 | Boolean(bln1) ->
                     match item2 with
                     | Boolean(bln2) -> bln1.CompareTo(bln2)
+                    | Empty -> undef
                     | _ -> 0
                 | Date(date1) ->
                     match item2 with
                     | Date(date2) -> date1.CompareTo(date2)
+                    | Empty -> undef
                     | _ -> 0
+                | DataArray(arr1) ->
+                    match item2 with
+                    | DataArray(arr2) -> if arr1 = arr2 then 0 else undef
+                    | Empty -> undef
+                    | _ -> 0
+                | DataHash(hash1) ->
+                    match item2 with
+                    | DataHash(hash2) -> if hash1 = hash2 then 0 else undef
+                    | Empty -> Int32.MinValue
+                    | _ -> 0
+                | FunctionRef(addr1, _) ->
+                    match item2 with
+                    | FunctionRef(addr2, _) -> if addr1 = addr2 then 0 else undef
+                    | Empty -> undef
+                    | _ -> undef
                 | Empty ->
                     match item2 with
                     | Empty -> 0
-                    | _ -> -1
+                    | _ -> undef
                 | _ -> 0
             in setCmpResult result
 
@@ -213,6 +235,21 @@ module internal Core =
                                 elemsHash.Add(key, value))
                       [1..numElems]
             context.PushToStack (Data.DataHash(elemsHash))
+
+        /// Bind references in hash to hash itself
+        let bindInnerReferences() =
+            let hashToBind = context.PopFromStack() in
+            match hashToBind with
+            | DataHash hash ->
+                let hashElems = List.ofSeq hash
+                List.iter (fun (kv: KeyValuePair<string, Data>) -> 
+                    match kv.Value with
+                    | FunctionRef (addr, _) ->
+                        let boundRef = FunctionRef (addr, hashToBind) in
+                        hash.[kv.Key] <- boundRef
+                    | _ -> ()) hashElems
+            | _ -> failwith "Expected: hash!"
+            context.PushToStack hashToBind
 
         /// Return array/hash element
         let getArrayElem() : Data =
@@ -333,10 +370,12 @@ module internal Core =
                 // Arrays/hashes
                 | MakeArray elemCount -> makeElemsArray elemCount
                 | MakeHash elemCount -> makeElemsHash elemCount
-                | MakeFunctionRef addr -> context.PushToStack(FunctionRef addr)
+                | MakeFunctionRef addr -> context.PushToStack(FunctionRef (addr, Empty))
                 | ArrayGet -> let elem = getArrayElem() in context.PushToStack elem
                 | ArraySet -> setArrayElem()
                 | ArraySetMath op -> setArrayElemWithMath op
+
+                | BindInner -> bindInnerReferences()
 
                 // Operators
                 | Math op -> performMath op
@@ -353,8 +392,8 @@ module internal Core =
                     | Native func -> func context
                     | Defined addr -> context.JumpAsFunction addr
                 | Invoke ->
-                    let addr = context.PopAddrStack() in 
-                    context.JumpAsFunction addr
+                    let (address, boundObj) = context.PopAddrStack() in 
+                    context.JumpAsFunctionRef address boundObj
                 | Ret -> context.ReturnCallerFrame()
 
                 // Data output

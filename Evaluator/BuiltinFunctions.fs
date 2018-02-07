@@ -91,13 +91,17 @@ module internal BuiltinFunctions =
     
         let fn_todate (ctx: Context) =
             let dateString = ctx.PopStringFromStack()
-            let date = DateTime.Parse(dateString) in
-            ctx.PushToStack(Date date)
+            let date: DateTime ref = ref DateTime.MinValue in
+            if DateTime.TryParse(dateString, date)
+                then ctx.PushToStack(Date date.Value)
+                else ctx.PushToStack Empty
     
         let fn_tonumber (ctx: Context) =
             let strNum = ctx.PopStringFromStack()
-            let number = Double.Parse(strNum) in
-            ctx.PushToStack(Number number)
+            let number: Double ref = ref Double.NaN in
+            if Double.TryParse(strNum, number)
+                then ctx.PushToStack(Number number.Value)
+                else ctx.PushToStack Empty
     
         let fn_type (ctx: Context) =
             let typeName = match ctx.PopFromStack() with
@@ -285,7 +289,7 @@ module internal BuiltinFunctions =
         // Set event handler
         let fn_set_handler (ctx: Context) =
             let handlersMapping = getEventHandlers ctx
-            let handlerAddress = ctx.PopAddrStack()
+            let handlerAddress = fst(ctx.PopAddrStack())
             let eventName = ctx.PopStringFromStack() in
             if handlersMapping.ContainsKey(eventName)
                 then handlersMapping.[eventName] = handlerAddress |> ignore

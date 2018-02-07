@@ -16,7 +16,7 @@ module internal DataTypes =
         | DataArray of List<Data>
         | DataHash of Dictionary<string, Data>
         | Iterator of IteratorInfo
-        | FunctionRef of int
+        | FunctionRef of int * Data
 
     /// Perform iteration on array/hash
     and IteratorInfo(iterable: Data) =
@@ -65,7 +65,7 @@ module internal DataTypes =
                         nativeDict.Add(kv.Key, dataToNative(kv.Value))) hash
             nativeDict :> Object
         | Iterator(info) -> upcast(info) // Unchanged
-        | FunctionRef(addr) -> addr :> Object
+        | FunctionRef(addr, _) -> addr :> Object
 
     // Convert .NET object to Data
     let rec nativeToData (value: Object) : Data =

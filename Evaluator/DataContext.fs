@@ -19,7 +19,7 @@ module internal DataContext =
     type DataFrame(parent : DataFrame option, size: int) =
 
         /// Data stack
-        let stack = new Stack<Data>(10)
+        let stack = new LinkedList<Data>()
 
         /// Data registers
         let registers: Data array = Array.zeroCreate size
@@ -50,12 +50,18 @@ module internal DataContext =
             registers.[index] <- value
 
         /// Push value on top of stack
-        member this.PushStack (value : Data) = stack.Push(value)
+        member this.PushStack (value : Data) = stack.AddFirst(value) |> ignore
+
+        /// Add element to stack bottom
+        member this.PushStackBottom (value : Data) = stack.AddLast(value) |> ignore
 
         /// Pop value from top of stack
         member this.PopStack() =
             if stack.Count > 0
-                then stack.Pop()
+                then
+                    let item = stack.First
+                    stack.RemoveFirst()
+                    item.Value
                 else failwith "Stack is empty!"
 
         /// Is there a result of function?
@@ -132,7 +138,10 @@ module internal DataContext =
                                     hash in
                 String.Concat('[', String.Join(";", elemStrings), ']')
             | Iterator info -> String.Concat("<Forward iterator>")
-            | FunctionRef addr -> String.Concat("<Function at: ", addr, ">")
+            | FunctionRef (addr, obj) ->
+                match obj with
+                | Empty -> sprintf "<Function at: %d>" addr
+                | _ -> sprintf "<Bound function at: %d>" addr
         
         /// Execution in progress
         member this.Running = running
@@ -193,9 +202,9 @@ module internal DataContext =
             | _ -> failwith "Expected: Array!"
 
         /// Pop function address from stack
-        member this.PopAddrStack() : int =
+        member this.PopAddrStack() : int * Data =
             match this.PopFromStack() with
-            | FunctionRef(addr) -> addr
+            | FunctionRef (addr, obj) -> (addr, obj)
             | _ -> failwith "Expected: Function!"
 
         /// Pop value from stack and convert to string
@@ -241,6 +250,13 @@ module internal DataContext =
             frame <- childFrame
             returnAddresses.Push(index + 1)
             this.Jump(address)
+
+        /// Go to referenced function with bound object as first argument
+        member this.JumpAsFunctionRef (address: int) (boundObj: Data) =
+            match boundObj with
+            | Empty -> ()
+            | obj -> frame.PushStackBottom obj
+            this.JumpAsFunction address
 
         /// Go to event handler routine
         member this.JumpAsEventHandler (address : int) (isTerminal : bool) =

@@ -41,6 +41,23 @@ module Interpreter =
         | Paused = 2
         | Finished = 3
 
+    // Recent instructions cache
+    let private instructionsCache = new Dictionary<int, Loader.Sequence>()
+
+    /// Random values table
+    let private rndTable: int array =
+        let rnd = new System.Random() in
+        Array.ofSeq(Seq.map (fun _ -> rnd.Next()) [0..255])
+
+    /// Get hash of stream contents
+    let private computeStreamHash(stream: Stream) =
+        let contents: byte array = Array.create (int32 stream.Length) (byte 0)
+        stream.Read(contents, 0, int32(stream.Length)) |> ignore
+        let intitial = int32 rndTable.[0]
+        let hash = Array.fold (fun s e -> s ^^^ (rndTable.[int32 e])) intitial contents
+        stream.Seek(0L, SeekOrigin.Begin) |> ignore
+        hash
+
     /// Interpreter frontend
     type FrontEnd() =
         
@@ -69,8 +86,16 @@ module Interpreter =
             interpreter.Suspended.Add (fun _ -> state <- ExecutionState.Paused)
             interpreter.Ended.Add (fun _ -> state <- ExecutionState.Finished)
 
-            let scriptContent = Loader.Load(instructionsStream) in
-                interpreter.SetSequence(scriptContent)
+            // Load sequence using cache
+            let streamHash = computeStreamHash instructionsStream
+            let sequence =
+                if instructionsCache.ContainsKey streamHash
+                    then instructionsCache.[streamHash]
+                    else
+                        let scriptContent = Loader.Load(instructionsStream)
+                        instructionsCache.Add(streamHash, scriptContent)
+                        scriptContent
+            in interpreter.SetSequence sequence
 
         /// Set all input data (obsolete)
         member this.SetData (data: Dictionary<string, Object>) : unit =

@@ -149,6 +149,7 @@ module internal Loader =
             | "mk_array" -> OpCode.MakeArray(argument |> asNumber)
             | "mk_hash" -> OpCode.MakeHash(argument |> asNumber)
             | "mk_ref.udf" -> OpCode.MakeFunctionRef -1
+            | "bind_refs" -> OpCode.BindInner
             | "get" -> OpCode.ArrayGet
             | "set" -> OpCode.ArraySet
             | "set.op" when isMathOp(argument) ->
