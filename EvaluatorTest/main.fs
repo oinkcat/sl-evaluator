@@ -77,8 +77,7 @@ module main =
                        | None -> new Dictionary<string, Object>()
 
             // Measure time
-            let watch = new Stopwatch() in
-            watch.Start()
+            let watch = new Stopwatch() in watch.Start()
 
             // Interpreter frontend
             let interpreter = Interpreter.FrontEnd() in do
@@ -86,20 +85,20 @@ module main =
                 interpreter.SetData data
                 interpreter.Run()
 
-            // Output results
-            if interpreter.TextOutput.Count > 0 then do
+                watch.Stop()
+
+            // Output results (text)
+            for textCtxName in interpreter.TextOutput.Keys do
                 Console.WriteLine()
-                Console.WriteLine("Results:")
-                interpreter.TextOutput |> Seq.iter Console.WriteLine
-            // Output named results
+                Console.WriteLine("<{0}> context:", textCtxName)
+                interpreter.TextOutput.[textCtxName] |> Seq.iter Console.WriteLine
+            // Output named results (objects)
             if interpreter.DataResults.Count > 0 then do
                 Console.WriteLine()
                 Console.WriteLine("Named results:")
                 interpreter.DataResults
                 |> Seq.iter (fun kv -> printf "%s: %A" kv.Key kv.Value)
 
-            // Time elapsed
-            watch.Stop()
             let elapsed = watch.Elapsed in do
             Console.WriteLine()
             printf "Execution time: %A" elapsed

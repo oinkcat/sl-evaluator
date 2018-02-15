@@ -79,6 +79,13 @@ module internal BuiltinFunctions =
             let fmtDirective = sprintf "FORMAT: %s %s" fmtName fmtParams
             let fmtString = sprintf "!== %s ==!" fmtDirective in
             ctx.TextOutput.Add(fmtString)
+
+        let fn_setcontext (ctx: Context) =
+            let textCtxName = match ctx.PopFromStack() with
+                              | Text name -> name
+                              | Empty -> null
+                              | _ -> failwith "Expected: string!"
+            in ctx.SetTextOutputContext(textCtxName)
     
         let fn_length (ctx: Context) =
             let compoundElement: Data = ctx.PopFromStack()
@@ -183,7 +190,8 @@ module internal BuiltinFunctions =
             ("_iter_hasnext$", fn_iter_hasnext, 1)
             ("_iter_next$", fn_iter_next_elem, 1)
             // Other
-            ("Format", fn_format, 2)]
+            ("Format", fn_format, 2)
+            ("Context", fn_setcontext, 1)]
 
     /// Math functions
     type MathModule() =

@@ -111,11 +111,14 @@ module internal DataContext =
         /// Event handler frame
         let mutable handlerFrame: DataFrame = Unchecked.defaultof<DataFrame>
 
+        /// Name of current text output context
+        let mutable currentTextContextName = "default"
+
         /// Input data
         let input = new Dictionary<string, Data>()
 
         /// Results as text
-        let textResults = new List<string>()
+        let textContexts = new Dictionary<string, List<string>>()
 
         /// Named results
         let namedResults = new Dictionary<string, Object>()
@@ -142,6 +145,9 @@ module internal DataContext =
                 match obj with
                 | Empty -> sprintf "<Function at: %d>" addr
                 | _ -> sprintf "<Bound function at: %d>" addr
+
+        do
+            textContexts.Add(currentTextContextName, new List<string>())
         
         /// Execution in progress
         member this.Running = running
@@ -157,7 +163,10 @@ module internal DataContext =
         member this.Input = input
 
         /// Output text
-        member this.TextOutput = textResults
+        member this.TextOutput = textContexts.[currentTextContextName]
+
+        /// All text output contexts
+        member this.AllTextOutput = textContexts
 
         /// Output data
         member this.NamedResults = namedResults
@@ -296,6 +305,13 @@ module internal DataContext =
         /// External event is occured
         member this.ExternalEventOccured (name : string) (param : Data) =
             externalEvent.Trigger(name, param)
+
+        /// Change text output context
+        member this.SetTextOutputContext(name: string) =
+            let textCtxName = if name <> null then name else "default" in
+            currentTextContextName <- textCtxName
+            if not(textContexts.ContainsKey(currentTextContextName)) then
+                textContexts.Add(currentTextContextName, new List<string>())
 
         /// Dump frame contents
         member this.DumpFrame() = frame.Dump(dataToString)

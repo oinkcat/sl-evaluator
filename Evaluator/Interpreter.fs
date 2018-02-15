@@ -131,24 +131,3 @@ module Interpreter =
     let public GetModuleContents(name: string) : string list * string list =
         Modules.initialize()
         Modules.getModuleContents(name)
-    
-    /// Load script and evaluate data (obsolete)
-    let public Evaluate (sequenceStream: Stream)
-                        (data: Dictionary<string, Object>) : Results =
-
-        // Load extension modules
-        Modules.initialize()
-
-        try
-            let interpreter = Core.SequenceInterpreter() in do
-                interpreter.SetSequence(Loader.Load(sequenceStream))
-                interpreter.SetData data
-                interpreter.Run()
-            { 
-                Text = interpreter.TextResults
-                Named = interpreter.NamedResults
-            }
-        with
-            | :? LoadException as e -> raise (new EvaluatorException(e))
-            | :? ExecutionException as e -> raise (new EvaluatorException(e))
-            | _ -> reraise()

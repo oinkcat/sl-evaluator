@@ -331,7 +331,7 @@ module internal Core =
                 context.Frame.Global.SetRegister regIdx (nativeToData value)
 
         /// Result strings
-        member this.TextResults with get() = context.TextOutput
+        member this.TextResults with get() = context.AllTextOutput
 
         /// Named results
         member this.NamedResults with get() = context.NamedResults
