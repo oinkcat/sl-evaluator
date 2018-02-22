@@ -9,6 +9,8 @@ module internal Errors =
     type RuntimeErrorInfo = {
         Index : int
         OpCodeName : string
+        SourceModuleName : string
+        SourceLineNumber : int
         Error : Exception
         Dump : string
     }
@@ -23,6 +25,9 @@ module internal Errors =
     type ExecutionException(info: RuntimeErrorInfo) =
         inherit Exception(info.Error.Message)
 
+        let modName = info.SourceModuleName
+        let lineNo = info.SourceLineNumber
+
         member this.OpCodeInfo = info.OpCodeName
 
         member this.OpCodeIndex = info.Index
@@ -30,3 +35,11 @@ module internal Errors =
         member this.Stack = info.Error.StackTrace
 
         member this.FrameDump = info.Dump
+
+        override this.Message =
+            let mappingMessage =
+                if lineNo > 0 then
+                    sprintf "Source module: %s, line number: %d" modName lineNo
+                else
+                    "No source mapping information available!"
+            in String.Concat(base.Message, Environment.NewLine, mappingMessage)

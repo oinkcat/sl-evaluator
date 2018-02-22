@@ -68,12 +68,19 @@ module internal Core =
         | Emit
         | EmitNamed of string
 
+    /// Source code mapping info
+    type SourceInfo = {
+        ModuleName : string
+        LineNumber : int
+    }
+
     /// Instructions sequence
     type Sequence = {
         SharedVarNames : List<string>
         Data : List<Data>
         Functions : Dictionary<int, FunctionInfo>
         Instructions : List<OpCode>
+        SourceMap : Dictionary<int, SourceInfo>
     }
 
     /// Instruction sequence interpreter
@@ -451,11 +458,20 @@ module internal Core =
                     this.ExecuteSequence program
                 with e ->
                     // Runtime exceptions handling
+                    let hasSrcMapping = program.SourceMap.ContainsKey(context.Index)
                     let errorInfo: Errors.RuntimeErrorInfo = {
                         Index = context.Index
                         OpCodeName = program.Instructions.[context.Index].ToString()
                         Error = e
                         Dump = this.Dump()
+                        SourceModuleName =
+                            if hasSrcMapping
+                                then program.SourceMap.[context.Index].ModuleName
+                                else String.Empty
+                        SourceLineNumber =
+                            if hasSrcMapping
+                                then program.SourceMap.[context.Index].LineNumber
+                                else 0
                         } in raise (new Errors.ExecutionException(errorInfo))
             | None -> failwith "No instructions specified!"
 

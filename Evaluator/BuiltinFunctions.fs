@@ -294,14 +294,30 @@ module internal BuiltinFunctions =
             
             contextEventHandlers.[ctx]
 
-        // Set event handler
-        let fn_set_handler (ctx: Context) =
+        // Set handler address for specified client
+        let setEventHandlerAddr (ctx: Context) (evtName: string) (addr: int) =
             let handlersMapping = getEventHandlers ctx
+            if handlersMapping.ContainsKey(evtName)
+                then handlersMapping.[evtName] = addr |> ignore
+                else handlersMapping.Add(evtName, addr) |> ignore
+
+        /// Set event handler
+        let fn_set_handler (ctx: Context) =
             let handlerAddress = fst(ctx.PopAddrStack())
             let eventName = ctx.PopStringFromStack() in
-            if handlersMapping.ContainsKey(eventName)
-                then handlersMapping.[eventName] = handlerAddress |> ignore
-                else handlersMapping.Add(eventName, handlerAddress) |> ignore
+            setEventHandlerAddr ctx eventName handlerAddress
+
+        /// Map events to handlers
+        let fn_map_handlers (ctx: Context) =
+            match ctx.PopFromStack() with
+            | DataHash handlers ->
+                for kv in handlers do
+                    match kv.Value with
+                    | FunctionRef (addr, _) ->
+                        let eventName = kv.Key in
+                        setEventHandlerAddr ctx eventName addr
+                    | _ -> ()
+            | _ -> failwith "Hash required!"
 
         // Suspend execution and wait for events
         let fn_start_loop (ctx: Context) =
@@ -341,5 +357,6 @@ module internal BuiltinFunctions =
         /// All functions
         override this.AllFunctionsInfo = [
             ("SetHandler", fn_set_handler, 2)
+            ("MapHandlers", fn_map_handlers, 1)
             ("StartLoop", fn_start_loop, 0)
             ("ExitLoop", fn_exit_loop, 0)]

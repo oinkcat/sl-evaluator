@@ -18,6 +18,7 @@ module internal Loader =
     type FnDisp = Core.FunctionKind
     type FnInfo = DataContext.FunctionInfo
     type Sequence = Core.Sequence
+    type SrcInfo = Core.SourceInfo
     type Data = DataTypes.Data
 
     /// Instruction data source types with value
@@ -34,6 +35,8 @@ module internal Loader =
         | SharedVars
         | Data
         | Code
+
+    type CommandInfo = OpCode * string option * SrcInfo option
 
     /// Get data with source type for instruction
     let private getSource (arg: string) : Source =
@@ -109,20 +112,33 @@ module internal Loader =
                         else name in
         (modName, objName)
 
-    /// Translate one command into opcode
-    let private translate (line: string) : OpCode * string option =
+    /// Command regex
+    let private cmdRegex =
+        let opts = RegexOptions.Compiled in
+        new Regex("^(\S+)(?:(?! ; #)\s(.+?))?(?: ; #(.+?)\((\d+)\))?$", opts)
 
-        let spacePos = line.IndexOf(' ')
-        let name = if spacePos > -1
-                   then line.Substring(0, spacePos)
-                   else line
-        let argument = if spacePos > -1
-                       then line.Substring(spacePos + 1).Trim()
-                       else String.Empty
-        let opName = name.Trim().ToLowerInvariant() in
+    /// Translate one command into opcode
+    let private translate (line: string) : CommandInfo =
+
+        // Parse command
+        let cmdMatch = cmdRegex.Match(line)
+        if not(cmdMatch.Success) then failwithf "Invalid command format: %s" line
+
+        let name = cmdMatch.Groups.[1].Value
+        let argument = if cmdMatch.Groups.[2].Success
+                           then cmdMatch.Groups.[2].Value.Trim()
+                           else String.Empty
+
+        let srcInfo : SrcInfo option =
+            if cmdMatch.Groups.[3].Success && cmdMatch.Groups.[4].Success
+                then let info : SrcInfo = {
+                            ModuleName = cmdMatch.Groups.[3].Value
+                            LineNumber = int(cmdMatch.Groups.[4].Value)
+                         } in Some(info)
+                else None
 
         let opCode =
-            match opName with
+            match name.Trim().ToLowerInvariant() with
             // Data accessing
             | "load" -> match getSource argument with
                         | Number num -> OpCode.LoadNum num
@@ -178,8 +194,10 @@ module internal Loader =
             | "call.udf" -> OpCode.Call(FnDisp.Defined -1)
             | "invoke" -> OpCode.Invoke
             | "ret" -> OpCode.Ret
-            | _ -> failwithf "Invalid instruction: %s!" opName
-        in match opCode with
+            | _ -> failwithf "Invalid instruction: %s!" name
+
+        let opWithLabel =
+            match opCode with
             // Return label name for jump commands
             | OpCode.Jump _ as jOpCode -> (jOpCode, Some(argument))
             | OpCode.CondJump _ as cjOpCode -> (cjOpCode, Some(argument))
@@ -189,6 +207,8 @@ module internal Loader =
                 | _ -> (callOpCode, None)
             | OpCode.MakeFunctionRef _ as refOpCode -> (refOpCode, Some(argument))
             | nonJumpOpCode -> (nonJumpOpCode, None)
+
+        in (fst opWithLabel, snd opWithLabel, srcInfo)
 
     /// Is line is a comment
     let private isComment (line: string) = line.StartsWith(";")
@@ -221,6 +241,7 @@ module internal Loader =
         let sharedVariables = new List<string>()
         let data = new List<Data>()
         let sequence = new List<OpCode>()
+        let sourceMap = new Dictionary<int, SrcInfo>()
 
         let functions = new Dictionary<int, FnInfo>()
         functions.Add(-1, {
@@ -264,7 +285,7 @@ module internal Loader =
             let readInstruction (line: string) =
                 // Regular instruction
                 isInstruction.Value <- true
-                let (opCode, label) = translate line
+                let (opCode, label, srcInfo) = translate line
                 if label.IsSome then
                     labelRefs.Add(index, label.Value)
                 // Check frame size
@@ -276,6 +297,8 @@ module internal Loader =
                             frameSizes.[funcAddress.Value] <- newNum
                     | _ -> ()
                 sequence.Add(opCode)
+                if srcInfo.IsSome then
+                    sourceMap.Add(sequence.Count, srcInfo.Value)
 
             // Read label/function definition
             let readLabel (line: string) =
@@ -358,5 +381,6 @@ module internal Loader =
             Data = data
             Functions = functions
             Instructions = sequence
+            SourceMap = sourceMap
         }
  
