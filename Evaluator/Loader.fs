@@ -20,6 +20,7 @@ module internal Loader =
     type Sequence = Core.Sequence
     type SrcInfo = Core.SourceInfo
     type Data = DataTypes.Data
+    type Index = Core.ArrayIndex
 
     /// Instruction data source types with value
     type private Source =
@@ -167,7 +168,15 @@ module internal Loader =
             | "mk_ref.udf" -> OpCode.MakeFunctionRef -1
             | "bind_refs" -> OpCode.BindInner
             | "get" -> OpCode.ArrayGet
+            | "get.index" -> match getSource argument with
+                             | Number idx ->OpCode.ArrayGetIdx(Index.ElemIndex idx)
+                             | Text key -> OpCode.ArrayGetIdx(Index.ElemKey key)
+                             | _ -> failwithf "Invalid array index: %s!" argument
             | "set" -> OpCode.ArraySet
+            | "set.index" -> match getSource argument with
+                             | Number idx ->OpCode.ArraySetIdx(Index.ElemIndex idx)
+                             | Text key -> OpCode.ArraySetIdx(Index.ElemKey key)
+                             | _ -> failwithf "Invalid array index: %s!" argument
             | "set.op" when isMathOp(argument) ->
                 let mathOp = mathOps.[argument] in
                 OpCode.ArraySetMath(mathOps.[argument])
@@ -359,6 +368,9 @@ module internal Loader =
         labelRefs.Keys
         |> Seq.iter (fun opIdx ->
             let labelName = labelRefs.[opIdx]
+            if not(labelTargets.ContainsKey(labelName))
+                then failwithf "Label name: %s not found!" labelName
+
             let target = labelTargets.[labelName]
             sequence.[opIdx] <- 
                 match sequence.[opIdx] with

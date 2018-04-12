@@ -26,11 +26,19 @@ module internal DataContext =
 
         /// Caller data frame
         let parentFrame = parent
+
+        /// Is Executed as function reference
+        let mutable isExecutedAsRef: bool = false
         
         (* ******************** Instance members ******************** *)
 
         /// Caller frame reference
         member this.Caller with get() = parent
+
+        /// Executed as function reference
+        member this.IsReferenced
+            with get() = isExecutedAsRef and
+                 set(isRef: bool) = isExecutedAsRef <- isRef
 
         /// Global frame reference
         member this.Global
@@ -83,6 +91,9 @@ module internal DataContext =
 
     /// Data context
     type Context(allFunctions : Dictionary<int, FunctionInfo>) =
+
+        // Native function requested execution of user's function reference
+        let nestedExecutionRequested: Event<unit> = Event<unit>()
 
         // Execution state changed
         let stateChanged: Event<bool> = Event<bool>()
@@ -267,13 +278,25 @@ module internal DataContext =
             | obj -> frame.PushStackBottom obj
             this.JumpAsFunction address
 
-        /// Go to event handler routine
-        member this.JumpAsEventHandler (address : int) (isTerminal : bool) =
+        /// Go to and execute event handler routine
+        member this.ExecuteEventHandler (address : int) (isTerminal : bool) =
             // Don't advance instruction pointer
             index <- index - 1
             this.JumpAsFunction address
             // Store handler frame for return to dispatcher
             if not isTerminal then handlerFrame <- frame
+            // Resume execution
+            this.Resume()
+
+        /// Go to and execute function reference
+        member this.ExecuteFunctionRef (address: int) (boundObj: Data) =
+            index <- index - 1
+            this.JumpAsFunctionRef address boundObj
+            // Not a usual jump
+            jumped <- false
+            frame.IsReferenced <- true
+            nestedExecutionRequested.Trigger()
+            running <- true
 
         /// Return result and control to caller
         member this.ReturnCallerFrame() =
@@ -281,9 +304,16 @@ module internal DataContext =
                 let fnResult = frame.PopStack() in
                 frame.Caller.Value.PushStack(fnResult)
 
+            // Terminate nested execution of function reference
+            if frame.IsReferenced then running <- false
+
+            // Suspend execution after event handling
             if frame = handlerFrame then this.Suspend()
             frame <- frame.Caller.Value
             this.Jump(returnAddresses.Pop())
+
+        /// Request of execution user's function reference
+        member this.NestedExecutionRequested = nestedExecutionRequested.Publish
 
         /// Execution state changed event
         member this.ExecutionStateChanged = stateChanged.Publish

@@ -71,6 +71,12 @@ module internal BuiltinFunctions =
                 if found.IsSome
                     then ctx.PushToStack(found.Value)
                     else ctx.PushToStack Empty
+            | DataHash hash ->
+                match elemToFind with
+                | Text key ->
+                    let hasElementKey = hash.ContainsKey(key) in
+                    ctx.PushToStack(Boolean hasElementKey)
+                | _ -> failwith "Expected string key for hash!"
             | _ -> failwithf "Expected: array!"
     
         let fn_format (ctx: Context) =
@@ -158,6 +164,16 @@ module internal BuiltinFunctions =
             appendElements array
             ctx.PushToStack(DataArray result)
 
+        let fn_sort_with (ctx: Context) =
+            let (funcAddr, boundObj) = ctx.PopAddrStack()
+            let array = ctx.PopArrayFromStack() in do
+                array.Sort(fun x y ->
+                            ctx.PushToStack(x)
+                            ctx.PushToStack(y)
+                            ctx.ExecuteFunctionRef funcAddr boundObj
+                            int(ctx.PopNumberFromStack()))
+                ctx.PushToStack(DataArray array)
+
         /// All constants
         override this.AllConstantsInfo =
             Map.ofList [
@@ -185,6 +201,7 @@ module internal BuiltinFunctions =
             ("Delete", fn_delete, 2)
             ("RangeArray", fn_rangearray, 2)
             ("Flatten", fn_flatten, 1)
+            ("SortWith", fn_sort_with, 2)
             // Iterator functions
             ("_iter_create$", fn_iter_create, 1)
             ("_iter_hasnext$", fn_iter_hasnext, 1)
@@ -331,8 +348,7 @@ module internal BuiltinFunctions =
                     // Jump to handler address
                     let handlerAddress = allHandlers.[eventName] in
                     ctx.PushToStack (snd data)
-                    ctx.JumpAsEventHandler handlerAddress isExitEvent
-                    ctx.Resume()
+                    ctx.ExecuteEventHandler handlerAddress isExitEvent
                 else if isExitEvent then
                     // Continue standard control flow
                     ctx.Resume()

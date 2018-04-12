@@ -32,8 +32,15 @@ module internal Core =
     type ComparsionResult = IsLess | IsEqual | IsGreater | Undefined
 
     /// Function type and access information
-    type FunctionKind = 
-        Native of FuncType | Defined of int
+    type FunctionKind = Native of FuncType | Defined of int
+
+    /// Array index type
+    type ArrayIndex =
+        ElemIndex of float | ElemKey of string
+        member this.ToData(): Data =
+            match this with
+            | ElemIndex idx -> Number idx
+            | ElemKey key -> Text key
 
     /// Instruction opcode
     type OpCode =
@@ -54,7 +61,9 @@ module internal Core =
         | MakeFunctionRef of int
         | BindInner
         | ArrayGet
+        | ArrayGetIdx of ArrayIndex
         | ArraySet
+        | ArraySetIdx of ArrayIndex
         | ArraySetMath of MathOp
         | Math of MathOp
         | String of StringOp
@@ -258,9 +267,8 @@ module internal Core =
             | _ -> failwith "Expected: hash!"
             context.PushToStack hashToBind
 
-        /// Return array/hash element
-        let getArrayElem() : Data =
-            let index: Data = context.PopFromStack()
+        /// Return array/hash element by it's index
+        let getArrayElemByIndex(index: Data) =
             let arrayItem: Data = context.PopFromStack() in
             match arrayItem with
             | DataArray(arr) ->
@@ -275,9 +283,13 @@ module internal Core =
                 | _ -> failwith "Expected string index for hash!"
             | _ -> failwith "Array required!" 
 
-        /// Set array/hash element
-        let setArrayElem(): unit =
-            let index: Data = context.PopFromStack()
+        /// Return array/hash element
+        let getArrayElem() : Data =
+            let index: Data = context.PopFromStack() in
+            getArrayElemByIndex index
+
+        /// Return array/hash by it's index
+        let setArrayElemByIndex(index: Data) =
             let arrayItem: Data = context.PopFromStack()
             let elem: Data = context.PopFromStack() in
             match arrayItem with
@@ -290,6 +302,11 @@ module internal Core =
                 | Text(key) -> hash.[key] <- elem
                 | _ -> failwith "Expected string index for hash!"
             | _ -> failwith "Array required!"
+            
+        /// Set array/hash element
+        let setArrayElem(): unit =
+            let index: Data = context.PopFromStack() in
+            setArrayElemByIndex index
 
         /// Set array/hash element with performing math operation
         let setArrayElemWithMath (op: MathOp) : unit =
@@ -379,7 +396,11 @@ module internal Core =
                 | MakeHash elemCount -> makeElemsHash elemCount
                 | MakeFunctionRef addr -> context.PushToStack(FunctionRef (addr, Empty))
                 | ArrayGet -> let elem = getArrayElem() in context.PushToStack elem
+                | ArrayGetIdx index ->
+                    let elem = getArrayElemByIndex(index.ToData()) in
+                        context.PushToStack elem
                 | ArraySet -> setArrayElem()
+                | ArraySetIdx index -> setArrayElemByIndex(index.ToData())
                 | ArraySetMath op -> setArrayElemWithMath op
 
                 | BindInner -> bindInnerReferences()
@@ -410,11 +431,6 @@ module internal Core =
                     context.NamedResults.Add(key, value)
 
                 context.AdvanceIndex()
-            
-            // Interrupt reason
-            if context.Running
-                then ended.Trigger()
-                else suspended.Trigger()
 
         /// Set input data
         member this.SetData (data: Dictionary<string, Object>) : unit =
@@ -430,6 +446,11 @@ module internal Core =
             sharedVarNames <- script.SharedVarNames
             constData <- script.Data
             context <- Context(script.Functions)
+
+            // Start nested execution
+            let nestedExecRequested() =
+                let instructions = program.Value
+                this.ExecuteSequence instructions
             
             // Suspend state change event handler
             let stateChanged (active: bool) =
@@ -439,6 +460,8 @@ module internal Core =
                         // Continue execution
                         this.Run()
                     else suspended.Trigger()
+
+            context.NestedExecutionRequested.Add nestedExecRequested
             context.ExecutionStateChanged.Add stateChanged
 
         /// Raise external event
@@ -456,6 +479,11 @@ module internal Core =
             | Some(program) ->
                 try
                     this.ExecuteSequence program
+            
+                    // Interrupt reason
+                    if context.Running
+                        then ended.Trigger()
+                        else suspended.Trigger()
                 with e ->
                     // Runtime exceptions handling
                     let hasSrcMapping = program.SourceMap.ContainsKey(context.Index)
@@ -463,7 +491,7 @@ module internal Core =
                         Index = context.Index
                         OpCodeName = program.Instructions.[context.Index].ToString()
                         Error = e
-                        Dump = this.Dump()
+                        Dump = String.Empty
                         SourceModuleName =
                             if hasSrcMapping
                                 then program.SourceMap.[context.Index].ModuleName
