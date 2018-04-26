@@ -170,9 +170,6 @@ module internal DataContext =
         /// Current instruction index
         member this.Index = index
 
-        /// Input data (obsolete)
-        member this.Input = input
-
         /// Output text
         member this.TextOutput = textContexts.[currentTextContextName]
 

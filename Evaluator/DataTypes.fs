@@ -17,6 +17,9 @@ module internal DataTypes =
         | DataHash of Dictionary<string, Data>
         | Iterator of IteratorInfo
         | FunctionRef of int * Data
+        member this.IsNull with get() = match this with
+                                        | Empty -> true
+                                        | _ -> false
 
     /// Perform iteration on array/hash
     and IteratorInfo(iterable: Data) =

@@ -97,10 +97,6 @@ module Interpreter =
                         scriptContent
             in interpreter.SetSequence sequence
 
-        /// Set all input data (obsolete)
-        member this.SetData (data: Dictionary<string, Object>) : unit =
-            interpreter.SetData data
-
         /// Convert and get shared variable value
         member this.GetSharedVar(name: string) : Object =
             interpreter.Shared name

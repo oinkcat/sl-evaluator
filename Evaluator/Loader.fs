@@ -27,7 +27,6 @@ module internal Loader =
         | Number of float
         | Text of string
         | Register of int
-        | DataKey of string
 
     /// Script file sections
     type private Section =
@@ -46,7 +45,6 @@ module internal Loader =
         let tempNum: float ref = ref 0.0 in
         match prefix with
         | '#' -> Register(int(rest))
-        | '$' -> DataKey(rest)
         | '"' when rest.EndsWith("\"") ->
             let contents = rest.Substring(0, rest.Length - 1) in
                 Text(contents)
@@ -145,7 +143,6 @@ module internal Loader =
                         | Number num -> OpCode.LoadNum num
                         | Text str -> OpCode.LoadStr str
                         | Register regIdx -> OpCode.LoadReg regIdx
-                        | DataKey key -> OpCode.LoadData key
             | "load.global" -> OpCode.LoadRegGlobal(argument |> asNumber)
             | "load.const" -> let dataIdx : int ref = ref 0 in
                               if Int32.TryParse(argument, dataIdx)

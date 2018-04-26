@@ -47,7 +47,6 @@ module internal Core =
         | LoadStr of string
         | LoadNum of float
         | LoadReg of int
-        | LoadData of string
         | LoadRegGlobal of int
         | LoadConst of Data
         | LoadDataArray of int
@@ -378,7 +377,6 @@ module internal Core =
                 | LoadRegGlobal regIndex ->
                     let globalGet = context.Frame.Global.GetRegister in
                         context.PushToStack (globalGet(regIndex))
-                | LoadData key -> context.PushToStack context.Input.[key]
                 | LoadDataArray idx -> context.PushToStack constData.[idx]
                 | LoadConst value -> context.PushToStack value
                 | Duplicate -> context.DuplicateStackData()
@@ -431,14 +429,6 @@ module internal Core =
                     context.NamedResults.Add(key, value)
 
                 context.AdvanceIndex()
-
-        /// Set input data
-        member this.SetData (data: Dictionary<string, Object>) : unit =
-            Seq.iter (fun key ->
-                let value = data.[key]
-                let dataValue = nativeToData value
-                in context.Input.Add(key, dataValue))
-                data.Keys
 
         /// Set instructions sequence to interpret
         member this.SetSequence (script : Sequence) : unit =

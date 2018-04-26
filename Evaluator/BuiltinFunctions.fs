@@ -17,10 +17,6 @@ module internal BuiltinFunctions =
     /// Default module
     type BuiltinModule() =
         inherit NativeModule(definedModules.[0])
-
-        let fn__data_ (ctx: Context) =
-            let dataKey = ctx.PopStringFromStack() in
-            ctx.PushToStack (ctx.Input.[dataKey])
     
         let fn_append (ctx: Context) =
             let newElement: Data = ctx.PopFromStack()
@@ -174,6 +170,29 @@ module internal BuiltinFunctions =
                             int(ctx.PopNumberFromStack()))
                 ctx.PushToStack(DataArray array)
 
+        let fn_slice (ctx: Context) =
+            let length = ctx.PopFromStack()
+            let startIdx = int(ctx.PopNumberFromStack())
+            match ctx.PopFromStack() with
+            | Text str ->
+                // Substring
+                let subStrLength = match length with
+                                   | Number num -> int(num)
+                                   | Empty -> str.Length
+                                   | _ -> failwith "Expected: number or null!"
+                let subStr = str.Substring(startIdx, subStrLength) in
+                ctx.PushToStack(Text subStr)
+            | DataArray arr ->
+                // Array slice
+                let sliceLength = match length with
+                                  | Number num -> int(num)
+                                  | Empty -> arr.Count
+                                  | _ -> failwith "Expected: number or null!"
+                let sliceArray: Data array = Array.zeroCreate(sliceLength) in
+                arr.CopyTo(startIdx, sliceArray, 0, sliceLength)
+                ctx.PushToStack(DataArray(new List<Data>(sliceArray)))
+            | _ -> failwith "String or array expected!"
+
         /// All constants
         override this.AllConstantsInfo =
             Map.ofList [
@@ -189,8 +208,6 @@ module internal BuiltinFunctions =
             // Type checking
             ("Defined", fn_defined, 1)
             ("Type", fn_type, 1)
-            // Data access
-            ("$", fn__data_, 1)
             // Date functions
             ("DateNow", fn_datenow, 0)
             ("DateDiff", fn_datediff, 3)
@@ -202,6 +219,7 @@ module internal BuiltinFunctions =
             ("RangeArray", fn_rangearray, 2)
             ("Flatten", fn_flatten, 1)
             ("SortWith", fn_sort_with, 2)
+            ("Slice", fn_slice, 3)
             // Iterator functions
             ("_iter_create$", fn_iter_create, 1)
             ("_iter_hasnext$", fn_iter_hasnext, 1)

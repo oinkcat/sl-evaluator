@@ -82,7 +82,7 @@ module main =
             // Interpreter frontend
             let interpreter = Interpreter.FrontEnd() in do
                 interpreter.LoadScript fileStream
-                interpreter.SetData data
+                interpreter.SetSharedVal "Input" data
                 interpreter.Run()
 
                 watch.Stop()
