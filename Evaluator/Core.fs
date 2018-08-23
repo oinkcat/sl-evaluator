@@ -48,12 +48,14 @@ module internal Core =
         | LoadNum of float
         | LoadReg of int
         | LoadRegGlobal of int
+        | LoadRegOuter of int * int
         | LoadConst of Data
         | LoadDataArray of int
         | Duplicate
         | Unload
         | Store of int
         | StoreGlobal of int
+        | StoreOuter of int * int
         | Reset of int
         | MakeArray of int
         | MakeHash of int
@@ -159,9 +161,9 @@ module internal Core =
                     | DataHash(hash2) -> if hash1 = hash2 then 0 else undef
                     | Empty -> Int32.MinValue
                     | _ -> 0
-                | FunctionRef(addr1, _) ->
+                | FunctionRef(addr1, _, _) ->
                     match item2 with
-                    | FunctionRef(addr2, _) -> if addr1 = addr2 then 0 else undef
+                    | FunctionRef(addr2, _, _) -> if addr1 = addr2 then 0 else undef
                     | Empty -> undef
                     | _ -> undef
                 | Empty ->
@@ -259,8 +261,8 @@ module internal Core =
                 let hashElems = List.ofSeq hash
                 List.iter (fun (kv: KeyValuePair<string, Data>) -> 
                     match kv.Value with
-                    | FunctionRef (addr, _) ->
-                        let boundRef = FunctionRef (addr, hashToBind) in
+                    | FunctionRef (addr, _, clos) ->
+                        let boundRef = FunctionRef (addr, hashToBind, clos) in
                         hash.[kv.Key] <- boundRef
                     | _ -> ()) hashElems
             | _ -> failwith "Expected: hash!"
@@ -377,6 +379,9 @@ module internal Core =
                 | LoadRegGlobal regIndex ->
                     let globalGet = context.Frame.Global.GetRegister in
                         context.PushToStack (globalGet(regIndex))
+                | LoadRegOuter (level, regIdx) ->
+                    let outerFrame = context.Frame.GetOuter(level) in
+                    context.PushToStack (outerFrame.GetRegister regIdx)
                 | LoadDataArray idx -> context.PushToStack constData.[idx]
                 | LoadConst value -> context.PushToStack value
                 | Duplicate -> context.DuplicateStackData()
@@ -387,12 +392,16 @@ module internal Core =
                 | StoreGlobal regIndex ->
                     let globalSet = context.Frame.Global.SetRegister in
                         globalSet regIndex (context.PopFromStack())
+                | StoreOuter (level, regIdx) ->
+                    let outerFrame = context.Frame.GetOuter(level) in
+                    outerFrame.SetRegister regIdx (context.PopFromStack())
                 | Reset regIndex -> context.Frame.SetRegister regIndex Empty
 
                 // Arrays/hashes
                 | MakeArray elemCount -> makeElemsArray elemCount
                 | MakeHash elemCount -> makeElemsHash elemCount
-                | MakeFunctionRef addr -> context.PushToStack(FunctionRef (addr, Empty))
+                | MakeFunctionRef addr ->
+                    context.PushToStack(FunctionRef (addr, Empty, context.Frame))
                 | ArrayGet -> let elem = getArrayElem() in context.PushToStack elem
                 | ArrayGetIdx index ->
                     let elem = getArrayElemByIndex(index.ToData()) in
@@ -416,10 +425,10 @@ module internal Core =
                 | Call disp -> 
                     match disp with
                     | Native func -> func context
-                    | Defined addr -> context.JumpAsFunction addr
+                    | Defined addr -> context.JumpAsFunction addr None
                 | Invoke ->
-                    let (address, boundObj) = context.PopAddrStack() in 
-                    context.JumpAsFunctionRef address boundObj
+                    let (address, boundObj, closure) = context.PopAddrStack() in
+                    context.JumpAsFunctionRef address boundObj (Some closure)
                 | Ret -> context.ReturnCallerFrame()
 
                 // Data output

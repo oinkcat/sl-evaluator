@@ -2,7 +2,6 @@
 
 open System
 open System.Collections.Generic
-open System.Text
 open DataTypes
 
 /// All data context structures
@@ -14,80 +13,6 @@ module internal DataContext =
         ParamsCount : int
         FrameSize : int
     }
-
-    /// Global/function scope data frame
-    type DataFrame(parent : DataFrame option, size: int) =
-
-        /// Data stack
-        let stack = new LinkedList<Data>()
-
-        /// Data registers
-        let registers: Data array = Array.zeroCreate size
-
-        /// Caller data frame
-        let parentFrame = parent
-
-        /// Is Executed as function reference
-        let mutable isExecutedAsRef: bool = false
-        
-        (* ******************** Instance members ******************** *)
-
-        /// Caller frame reference
-        member this.Caller with get() = parent
-
-        /// Executed as function reference
-        member this.IsReferenced
-            with get() = isExecutedAsRef and
-                 set(isRef: bool) = isExecutedAsRef <- isRef
-
-        /// Global frame reference
-        member this.Global
-            with get() =
-                match parentFrame with
-                | None -> this
-                | Some(frame) -> frame.Global
-
-        /// Create frame for calee function
-        member this.CreateChildFrame(size) = DataFrame(Some(this), size)
-
-        /// Get register value
-        member this.GetRegister (index : int) = registers.[index]
-
-        /// Set register value
-        member this.SetRegister (index : int) (value : Data) : unit = 
-            registers.[index] <- value
-
-        /// Push value on top of stack
-        member this.PushStack (value : Data) = stack.AddFirst(value) |> ignore
-
-        /// Add element to stack bottom
-        member this.PushStackBottom (value : Data) = stack.AddLast(value) |> ignore
-
-        /// Pop value from top of stack
-        member this.PopStack() =
-            if stack.Count > 0
-                then
-                    let item = stack.First
-                    stack.RemoveFirst()
-                    item.Value
-                else failwith "Stack is empty!"
-
-        /// Is there a result of function?
-        member this.HasResult with get() = stack.Count > 0
-
-        /// Dump contents of frame and all parent frames
-        member this.Dump(dumpFunc: Data -> string) : string =
-            let buffer = new StringBuilder()
-
-            buffer.AppendLine("Stack contents:") |> ignore
-            for stackItem in stack do
-                buffer.AppendLine(dumpFunc(stackItem)) |> ignore
-
-            buffer.AppendLine("Registers:") |> ignore
-            for regData in registers do
-                buffer.AppendLine(dumpFunc(regData)) |> ignore
-
-            buffer.ToString()
 
     /// Data context
     type Context(allFunctions : Dictionary<int, FunctionInfo>) =
@@ -117,7 +42,7 @@ module internal DataContext =
         let mutable jumped : bool = false
 
         /// Current frame
-        let mutable frame: DataFrame = DataFrame(None, functions.[-1].FrameSize)
+        let mutable frame: DataFrame = DataFrame(None, functions.[-1].FrameSize, None)
 
         /// Event handler frame
         let mutable handlerFrame: DataFrame = Unchecked.defaultof<DataFrame>
@@ -152,7 +77,7 @@ module internal DataContext =
                                     hash in
                 String.Concat('[', String.Join(";", elemStrings), ']')
             | Iterator info -> String.Concat("<Forward iterator>")
-            | FunctionRef (addr, obj) ->
+            | FunctionRef (addr, obj, _) ->
                 match obj with
                 | Empty -> sprintf "<Function at: %d>" addr
                 | _ -> sprintf "<Bound function at: %d>" addr
@@ -219,9 +144,9 @@ module internal DataContext =
             | _ -> failwith "Expected: Array!"
 
         /// Pop function address from stack
-        member this.PopAddrStack() : int * Data =
+        member this.PopAddrStack() : int * Data * DataFrame =
             match this.PopFromStack() with
-            | FunctionRef (addr, obj) -> (addr, obj)
+            | FunctionRef (addr, obj, closure) -> (addr, obj, closure)
             | _ -> failwith "Expected: Function!"
 
         /// Pop value from stack and convert to string
@@ -256,39 +181,43 @@ module internal DataContext =
             jumped <- true
 
         /// Create function frame and store return address
-        member this.JumpAsFunction(address : int) =
+        member this.JumpAsFunction (address: int) (closure: DataFrame option) =
             let funcInfo = functions.[address]
             let numOfVars: int = funcInfo.FrameSize
-            let childFrame = frame.CreateChildFrame(numOfVars)
+            let childFrame = frame.CreateChildFrame numOfVars closure
             // Add parameters to function's locals
             for i = funcInfo.ParamsCount - 1 downto 0 do
-                let paramValue = frame.PopStack() in
+                let paramValue: Data = frame.PopStack() in
                 childFrame.SetRegister i paramValue
             frame <- childFrame
             returnAddresses.Push(index + 1)
             this.Jump(address)
 
         /// Go to referenced function with bound object as first argument
-        member this.JumpAsFunctionRef (address: int) (boundObj: Data) =
+        member this.JumpAsFunctionRef (address: int)
+                                      (boundObj: Data)
+                                      (closure: DataFrame option) =
             match boundObj with
             | Empty -> ()
             | obj -> frame.PushStackBottom obj
-            this.JumpAsFunction address
+            this.JumpAsFunction address closure
 
         /// Go to and execute event handler routine
         member this.ExecuteEventHandler (address : int) (isTerminal : bool) =
             // Don't advance instruction pointer
             index <- index - 1
-            this.JumpAsFunction address
+            this.JumpAsFunction address None // closure?
             // Store handler frame for return to dispatcher
             if not isTerminal then handlerFrame <- frame
             // Resume execution
             this.Resume()
 
         /// Go to and execute function reference
-        member this.ExecuteFunctionRef (address: int) (boundObj: Data) =
+        member this.ExecuteFunctionRef (address: int)
+                                       (boundObj: Data)
+                                       (closure: DataFrame option) =
             index <- index - 1
-            this.JumpAsFunctionRef address boundObj
+            this.JumpAsFunctionRef address boundObj closure
             // Not a usual jump
             jumped <- false
             frame.IsReferenced <- true

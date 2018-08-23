@@ -161,12 +161,12 @@ module internal BuiltinFunctions =
             ctx.PushToStack(DataArray result)
 
         let fn_sort_with (ctx: Context) =
-            let (funcAddr, boundObj) = ctx.PopAddrStack()
+            let (funcAddr, boundObj, closure) = ctx.PopAddrStack()
             let array = ctx.PopArrayFromStack() in do
                 array.Sort(fun x y ->
                             ctx.PushToStack(x)
                             ctx.PushToStack(y)
-                            ctx.ExecuteFunctionRef funcAddr boundObj
+                            ctx.ExecuteFunctionRef funcAddr boundObj (Some closure)
                             int(ctx.PopNumberFromStack()))
                 ctx.PushToStack(DataArray array)
 
@@ -337,18 +337,18 @@ module internal BuiltinFunctions =
                 else handlersMapping.Add(evtName, addr) |> ignore
 
         /// Set event handler
-        let fn_set_handler (ctx: Context) =
-            let handlerAddress = fst(ctx.PopAddrStack())
+        let fn_set_handler (ctx: Context) = // closure?
+            let (handlerAddress, _, _) = ctx.PopAddrStack()
             let eventName = ctx.PopStringFromStack() in
             setEventHandlerAddr ctx eventName handlerAddress
 
         /// Map events to handlers
-        let fn_map_handlers (ctx: Context) =
+        let fn_map_handlers (ctx: Context) = // closure?
             match ctx.PopFromStack() with
             | DataHash handlers ->
                 for kv in handlers do
                     match kv.Value with
-                    | FunctionRef (addr, _) ->
+                    | FunctionRef (addr, _, _) ->
                         let eventName = kv.Key in
                         setEventHandlerAddr ctx eventName addr
                     | _ -> ()

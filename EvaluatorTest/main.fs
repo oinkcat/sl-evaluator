@@ -4,7 +4,6 @@ open System
 open System.IO
 open System.Collections.Generic
 open System.Diagnostics
-open System.Text.RegularExpressions
 open Evaluator
 
 /// Interpreter test app
@@ -82,7 +81,9 @@ module main =
             // Interpreter frontend
             let interpreter = Interpreter.FrontEnd() in do
                 interpreter.LoadScript fileStream
-                interpreter.SetSharedVal "Input" data
+                try
+                    interpreter.SetSharedVal "Input" data
+                with _ -> ()
                 interpreter.Run()
 
                 watch.Stop()

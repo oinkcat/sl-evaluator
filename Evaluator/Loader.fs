@@ -144,6 +144,10 @@ module internal Loader =
                         | Text str -> OpCode.LoadStr str
                         | Register regIdx -> OpCode.LoadReg regIdx
             | "load.global" -> OpCode.LoadRegGlobal(argument |> asNumber)
+            | "load.outer" -> let argParts = argument.Split(':')
+                              let level = int(argParts.[0])
+                              let regIdx = int(argParts.[1]) in
+                              OpCode.LoadRegOuter (level, regIdx)
             | "load.const" -> let dataIdx : int ref = ref 0 in
                               if Int32.TryParse(argument, dataIdx)
                                   then OpCode.LoadDataArray dataIdx.Value
@@ -158,7 +162,12 @@ module internal Loader =
             | "unload" when no(argument) -> OpCode.Unload
             | "store" -> OpCode.Store(argument |> asNumber)
             | "store.global" -> OpCode.StoreGlobal(argument |> asNumber)
+            | "store.outer" -> let argParts = argument.Split(':')
+                               let level = int(argParts.[0])
+                               let regIdx = int(argParts.[1]) in
+                               OpCode.StoreOuter (level, regIdx)
             | "reset" -> OpCode.Reset(argument |> asNumber)
+
             // Arrays/hashes
             | "mk_array" -> OpCode.MakeArray(argument |> asNumber)
             | "mk_hash" -> OpCode.MakeHash(argument |> asNumber)
@@ -177,6 +186,7 @@ module internal Loader =
             | "set.op" when isMathOp(argument) ->
                 let mathOp = mathOps.[argument] in
                 OpCode.ArraySetMath(mathOps.[argument])
+
             // Operations
             | math when isMathOp(math) -> OpCode.Math mathOps.[math]
             | str when isStringOp(str) -> OpCode.String stringOps.[str]
@@ -188,8 +198,9 @@ module internal Loader =
             | "emit" -> if String.IsNullOrEmpty(argument)
                         then OpCode.Emit
                         else OpCode.EmitNamed(argument |> asText)
+
             // Function call/return
-            | "call.native" ->if argument.Length > 0
+            | "call.native" -> if argument.Length > 0
                                 then
                                     let names = splitQualifiedName argument
                                     let modName = fst names

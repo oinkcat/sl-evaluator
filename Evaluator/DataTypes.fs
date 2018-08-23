@@ -2,6 +2,7 @@
 
 open System
 open System.Collections.Generic
+open System.Text
 
 /// Data types and conversions
 module internal DataTypes =
@@ -16,7 +17,7 @@ module internal DataTypes =
         | DataArray of List<Data>
         | DataHash of Dictionary<string, Data>
         | Iterator of IteratorInfo
-        | FunctionRef of int * Data
+        | FunctionRef of int * Data * DataFrame
         member this.IsNull with get() = match this with
                                         | Empty -> true
                                         | _ -> false
@@ -53,6 +54,92 @@ module internal DataTypes =
 
         /// Has next element
         member this.HasNext with get() : bool = index < elementsCount
+
+    /// Global/function scope data frame
+    and  DataFrame(parent : DataFrame option, size: int, closure: DataFrame option) =
+
+        /// Data stack
+        let stack = new LinkedList<Data>()
+
+        /// Data registers
+        let registers: Data array = Array.zeroCreate size
+
+        /// Is Executed as function reference
+        let mutable isExecutedAsRef: bool = false
+        
+        (* ******************** Instance members ******************** *)
+
+        /// Caller frame reference
+        member this.Caller with get() = parent
+
+        //// Closure frame reference
+        member this.Closure with get() = closure
+
+        /// Get outer level closure frame
+        member this.GetOuter(level: int) : DataFrame =
+            let rec getParent frame left : DataFrame =
+                if left = 0
+                    then frame
+                    else getParent (frame.Caller.Value) (left - 1)
+
+            match closure with
+            | Some(frame) -> getParent frame (level - 1)
+            | None -> failwith "No closure frame!"
+
+        /// Executed as function reference
+        member this.IsReferenced
+            with get() = isExecutedAsRef and
+                 set(isRef: bool) = isExecutedAsRef <- isRef
+
+        /// Global frame reference
+        member this.Global
+            with get() =
+                match parent with
+                | None -> this
+                | Some(frame) -> frame.Global
+
+        /// Create frame for calee function
+        member this.CreateChildFrame (size: int) (closure: DataFrame option) =
+            DataFrame(Some(this), size, closure)
+
+        /// Get register value
+        member this.GetRegister (index : int) = registers.[index]
+
+        /// Set register value
+        member this.SetRegister (index : int) (value : Data) : unit = 
+            registers.[index] <- value
+
+        /// Push value on top of stack
+        member this.PushStack (value : Data) = stack.AddFirst(value) |> ignore
+
+        /// Add element to stack bottom
+        member this.PushStackBottom (value : Data) = stack.AddLast(value) |> ignore
+
+        /// Pop value from top of stack
+        member this.PopStack() =
+            if stack.Count > 0
+                then
+                    let item = stack.First
+                    stack.RemoveFirst()
+                    item.Value
+                else failwith "Stack is empty!"
+
+        /// Is there a result of function?
+        member this.HasResult with get() = stack.Count > 0
+
+        /// Dump contents of frame and all parent frames
+        member this.Dump(dumpFunc: Data -> string) : string =
+            let buffer = new StringBuilder()
+
+            buffer.AppendLine("Stack contents:") |> ignore
+            for stackItem in stack do
+                buffer.AppendLine(dumpFunc(stackItem)) |> ignore
+
+            buffer.AppendLine("Registers:") |> ignore
+            for regData in registers do
+                buffer.AppendLine(dumpFunc(regData)) |> ignore
+
+            buffer.ToString()
  
     /// Convert value to .NET object
     let rec dataToNative = function
@@ -68,7 +155,7 @@ module internal DataTypes =
                         nativeDict.Add(kv.Key, dataToNative(kv.Value))) hash
             nativeDict :> Object
         | Iterator(info) -> upcast(info) // Unchanged
-        | FunctionRef(addr, _) -> addr :> Object
+        | FunctionRef(addr, _, _) -> addr :> Object
 
     // Convert .NET object to Data
     let rec nativeToData (value: Object) : Data =
