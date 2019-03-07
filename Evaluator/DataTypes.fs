@@ -164,21 +164,22 @@ module internal DataTypes =
         | str when (str :? string) -> Text(str :?> string)
         // Convert to float
         | num when (num :? float) -> Number(num :?> float)
-        | num when (num :? int) -> Number(float(num :?> int))
+        | num when (num :? int32) -> Number(float(num :?> int32))
+        | num when (num :? int64) -> Number(float(num :?> int64))
         // Date
         | date when (date :? DateTime) -> Date(date :?> DateTime)
         // Boolean
         | bln when (bln :? bool) -> Boolean(bln :?> bool)
         // Array
-        | arr when arr.GetType().IsArray ->
-            let nativeArray = arr :?> Array
+        | arr when (arr :? IList<Object>) ->
+            let nativeArray = arr :?> IList<Object>
             let mapped = Seq.map (fun (idx: int) -> 
-                                    nativeToData (nativeArray.GetValue(idx)))
-                                    (seq { 0 .. (nativeArray.Length - 1) })
+                                    nativeToData (nativeArray.[idx]))
+                                    (seq { 0 .. (nativeArray.Count - 1) })
             DataArray(new List<Data>(mapped))
         // Hash
-        | hash when (hash :? Dictionary<string, Object>) ->
-            let srcDict = hash :?> Dictionary<string, Object>
+        | hash when (hash :? IDictionary<string, Object>) ->
+            let srcDict = hash :?> IDictionary<string, Object>
             let dstDict = new Dictionary<string, Data>() in
             Seq.iter (fun (kv: KeyValuePair<string, Object>) -> 
                         dstDict.Add(kv.Key, nativeToData kv.Value)) 

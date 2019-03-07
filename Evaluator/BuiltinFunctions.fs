@@ -32,6 +32,9 @@ module internal BuiltinFunctions =
                             | "y" -> diffSpan.TotalDays / 365.0
                             | "m" -> diffSpan.TotalDays / 30.0
                             | "d" -> diffSpan.TotalDays
+                            | "H" -> diffSpan.TotalHours
+                            | "M" -> diffSpan.TotalMinutes
+                            | "S" -> diffSpan.TotalSeconds
                             | _ -> failwith "Invalid DateDiff unit!"
             ctx.PushToStack (Number(result))
     
@@ -89,14 +92,21 @@ module internal BuiltinFunctions =
                               | _ -> failwith "Expected: string!"
             in ctx.SetTextOutputContext(textCtxName)
     
+        let get_data_length = function
+                | Text(str) -> str.Length
+                | DataArray(arr) -> arr.Count
+                | DataHash(hash) -> hash.Count
+                | _ -> failwith "Invalid value for Length!"
+
         let fn_length (ctx: Context) =
             let compoundElement: Data = ctx.PopFromStack()
-            let length: int = match compoundElement with
-                                | Text(str) -> str.Length
-                                | DataArray(arr) -> arr.Count
-                                | DataHash(hash) -> hash.Count
-                                | _ -> failwith "Invalid value for Length!"
+            let length: int = get_data_length compoundElement
             ctx.PushToStack (Number(float(length)))
+
+        let fn_bound (ctx: Context) =
+            let compoundElement: Data = ctx.PopFromStack()
+            let upBound: int = (get_data_length compoundElement) - 1
+            ctx.PushToStack (Number(float(upBound)))
     
         let fn_todate (ctx: Context) =
             let dateString = ctx.PopStringFromStack()
@@ -213,6 +223,7 @@ module internal BuiltinFunctions =
             ("DateDiff", fn_datediff, 3)
             // Array functions
             ("Length", fn_length, 1)
+            ("Bound", fn_bound, 1)
             ("Add", fn_append, 2)
             ("Find", fn_find, 2)
             ("Delete", fn_delete, 2)
