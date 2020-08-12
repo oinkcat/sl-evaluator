@@ -171,11 +171,18 @@ module internal DataTypes =
         // Boolean
         | bln when (bln :? bool) -> Boolean(bln :?> bool)
         // Array
-        | arr when (arr :? IList<Object>) ->
-            let nativeArray = arr :?> IList<Object>
+        | arr when arr.GetType().IsArray ->
+            let nativeArray = arr :?> Array
             let mapped = Seq.map (fun (idx: int) -> 
-                                    nativeToData (nativeArray.[idx]))
-                                    (seq { 0 .. (nativeArray.Count - 1) })
+                                    nativeToData (nativeArray.GetValue(idx)))
+                                    (seq { 0 .. (nativeArray.Length - 1) })
+            DataArray(new List<Data>(mapped))
+        // Enumerable
+        | enum when (enum :? IEnumerable<Object>) ->
+            let nativeEnumerable = enum :?> IEnumerable<Object>
+            let mapped = Seq.map (fun (elem: obj) -> 
+                                    nativeToData elem)
+                                    nativeEnumerable
             DataArray(new List<Data>(mapped))
         // Hash
         | hash when (hash :? IDictionary<string, Object>) ->

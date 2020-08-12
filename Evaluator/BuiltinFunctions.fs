@@ -159,6 +159,12 @@ module internal BuiltinFunctions =
             let array = new List<Data>(items) in
             ctx.PushToStack(DataArray array)
 
+        let fn_fillarray (ctx: Context) =
+            let count = int(ctx.PopNumberFromStack())
+            let item = ctx.PopFromStack()
+            let array = new List<Data>(Array.init count (fun _ -> item)) in
+            ctx.PushToStack(DataArray array)
+
         let fn_flatten (ctx: Context) =
             let array = ctx.PopArrayFromStack()
             let result = new List<Data>()
@@ -227,6 +233,7 @@ module internal BuiltinFunctions =
             ("Add", fn_append, 2)
             ("Find", fn_find, 2)
             ("Delete", fn_delete, 2)
+            ("FillArray", fn_fillarray, 2)
             ("RangeArray", fn_rangearray, 2)
             ("Flatten", fn_flatten, 1)
             ("SortWith", fn_sort_with, 2)
